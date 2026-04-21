@@ -46,6 +46,7 @@ export const deploymentAPI = {
   deploy: (d) => api.post('/deployment/deploy', d),
   verifyInstallation: (d) => api.post('/deployment/verify-installation', d),
   getJob: (id) => api.get(`/deployment/jobs/${id}`),
+  checkDuplicates: (endpoint_ids) => api.post('/deployment/check-duplicates', { endpoint_ids }),
 };
 
 export const serviceStatusAPI = {

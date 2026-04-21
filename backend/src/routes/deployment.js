@@ -6,7 +6,8 @@ const path = require('path');
 const fs = require('fs/promises');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
-const pool = require('../config/database');
+const pool    = require('../config/database');
+const extPool = pool.extPool;
 const { auth, requireAdmin } = require('../middleware/auth');
 let decryptPassword;
 try {
@@ -375,6 +376,10 @@ async function deployLinuxEndpoint(target, settings = {}) {
       if (shouldInstallNessus) {
         remoteSteps.push(`bash -lc ${shQuote(nessusCurlCommand)}`);
       }
+      if (shouldInstallManageEngine) {
+        const toClean = [remoteBin, remoteCfg].filter(Boolean).map(shQuote).join(' ');
+        remoteSteps.push(`rm -f ${toClean} || true`);
+      }
       const remoteCommand = remoteSteps.join(' && ');
       const result = await runLocalCommand('sshpass', ['-p', password, 'ssh', ...sshExecCommon, `${username}@${host}`, remoteCommand]);
       return {
@@ -404,6 +409,10 @@ async function deployLinuxEndpoint(target, settings = {}) {
     }
     if (shouldInstallNessus) {
       remoteSteps.push(`bash -lc ${shQuote(nessusCurlCommand)}`);
+    }
+    if (shouldInstallManageEngine) {
+      const toClean = [remoteBin, remoteCfg].filter(Boolean).map(shQuote).join(' ');
+      remoteSteps.push(`rm -f ${toClean} || true`);
     }
     const remoteCommand = remoteSteps.join(' && ');
     const result = await runLocalCommand('plink', ['-batch', '-ssh', '-noagent', '-P', String(port), '-pw', password, `${username}@${host}`, remoteCommand]);
@@ -452,6 +461,10 @@ try {
       Installer = $installer
     }
   } -ArgumentList '${psQuote(remoteInstaller)}', '${psQuote(silentArgs)}'
+  Invoke-Command -Session $session -ScriptBlock {
+    param($f)
+    Remove-Item -Path $f -Force -ErrorAction SilentlyContinue
+  } -ArgumentList '${psQuote(remoteInstaller)}'
   $result | ConvertTo-Json -Compress
 }
 finally {
@@ -836,6 +849,46 @@ router.post('/deploy', auth, requireAdmin, async (req, res) => {
     res.json(payload);
   } catch (e) {
     res.status(500).json({ error: e.message || 'Deployment run failed' });
+  }
+});
+
+// POST /api/deployment/check-duplicates
+// Cross-checks selected asset hostnames against Ext. Asset Inventory before deployment
+router.post('/check-duplicates', auth, requireAdmin, async (req, res) => {
+  try {
+    const ids = (Array.isArray(req.body?.endpoint_ids) ? req.body.endpoint_ids : [])
+      .map(Number).filter(Number.isFinite);
+    if (!ids.length) return res.json({ duplicates: [] });
+
+    const assetsQ = await pool.query(
+      `SELECT id, vm_name, os_hostname FROM assets WHERE id = ANY($1::int[])`,
+      [ids]
+    );
+
+    const duplicates = [];
+    for (const ep of assetsQ.rows) {
+      const hostname = toTrimmed(ep.os_hostname) || toTrimmed(ep.vm_name);
+      if (!hostname) continue;
+      const extQ = await extPool.query(
+        `SELECT id, COALESCE(vm_name,'') AS vm_name, COALESCE(asset_name,'') AS asset_name
+         FROM items
+         WHERE LOWER(TRIM(COALESCE(vm_name,'')))  = LOWER($1)
+            OR LOWER(TRIM(COALESCE(asset_name,''))) = LOWER($1)
+         LIMIT 5`,
+        [hostname]
+      );
+      if (extQ.rows.length > 0) {
+        duplicates.push({
+          asset_id: ep.id,
+          hostname,
+          matches: extQ.rows.map(r => r.vm_name || r.asset_name).filter(Boolean),
+        });
+      }
+    }
+
+    res.json({ duplicates });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Duplicate check failed' });
   }
 });
 

@@ -2,13 +2,19 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast';
 import { deploymentAPI } from '../services/api';
 import {
-  RefreshCw, Play, CheckCircle2, Save, Upload, Download, Trash2, Package,
+  RefreshCw, Play, CheckCircle2, Save, Upload, Download, Trash2, Package, AlertTriangle,
 } from 'lucide-react';
 
 const CONFIG_KEY = 'software_deploy_config_v1';
 
+const REGIONS = ['Burlington', 'Toronto', 'Bomgar', 'Beijing'];
+
 const DEFAULT_SETTINGS = {
-  windows_installer_path: '',
+  windows_region: 'Burlington',
+  windows_installer_path_burlington: '',
+  windows_installer_path_toronto: '',
+  windows_installer_path_bomgar: '',
+  windows_installer_path_beijing: '',
   windows_silent_args: '/silent',
   windows_remote_directory: 'C:\\Windows\\Temp',
   windows_transport_protocol: 'Auto',
@@ -62,6 +68,7 @@ export default function SoftwareDeploymentPage() {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [logs, setLogs] = useState([]);
   const [verificationRows, setVerificationRows] = useState([]);
+  const [duplicateWarning, setDuplicateWarning] = useState(null); // { ids, duplicates }
   const fileRef = useRef(null);
   const windowsProtocol = settings.windows_transport_protocol || settings.windows_mode || 'Auto';
 
@@ -201,18 +208,32 @@ export default function SoftwareDeploymentPage() {
     }
   };
 
+  const checkAndDeploy = async (ids) => {
+    if (!ids.length) { toast.error('Select endpoints first'); return; }
+    try {
+      const r = await deploymentAPI.checkDuplicates(ids);
+      const dups = r.data?.duplicates || [];
+      if (dups.length > 0) { setDuplicateWarning({ ids, duplicates: dups }); return; }
+    } catch { /* if check fails, proceed */ }
+    runDeploy(ids);
+  };
+
   const runDeploy = async (ids) => {
     if (!ids.length) {
       toast.error('Select endpoints first');
       return;
     }
+    setDuplicateWarning(null);
     setBusy(true);
     appendLog(`Starting deployment run for ${ids.length} endpoint(s).`);
     try {
+      const regionKey = `windows_installer_path_${(settings.windows_region || 'burlington').toLowerCase()}`;
+      const resolvedWinPath = settings[regionKey] || '';
       const payload = {
         endpoint_ids: ids,
         settings: {
           ...settings,
+          windows_installer_path: resolvedWinPath,
           windows_transport_protocol: windowsProtocol,
           windows_primary_port: toInt(settings.windows_primary_port, 5985),
           windows_winrm_port: toInt(settings.windows_winrm_port, 5985),
@@ -296,11 +317,33 @@ export default function SoftwareDeploymentPage() {
           <div className={`${glassCard} p-4 space-y-4 xl:col-span-1`}>
             <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-semibold">Operations</p>
             <p className="font-semibold text-gray-800 -mt-2">Actions</p>
+
+            {/* Hostname duplicate warning */}
+            {duplicateWarning && (
+              <div className="rounded-xl border border-orange-300 bg-orange-50 p-3 space-y-2">
+                <p className="text-xs font-semibold text-orange-800 flex items-center gap-1.5">
+                  <AlertTriangle size={14} /> Hostname Duplicate Detected
+                </p>
+                <p className="text-xs text-orange-700">The following hostnames exist in both Asset Inventory and Ext. Asset Inventory:</p>
+                <ul className="text-xs text-orange-800 space-y-0.5 pl-2">
+                  {duplicateWarning.duplicates.map((d, i) => (
+                    <li key={i}>• <strong>{d.hostname}</strong> → also in Ext: {d.matches.join(', ')}</li>
+                  ))}
+                </ul>
+                <div className="flex gap-2 pt-1">
+                  <button type="button" className="btn-primary text-xs !bg-orange-600 hover:!bg-orange-700"
+                    onClick={() => runDeploy(duplicateWarning.ids)}>Proceed Anyway</button>
+                  <button type="button" className="btn-secondary text-xs"
+                    onClick={() => setDuplicateWarning(null)}>Cancel</button>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-2">
-              <button type="button" className="btn-primary text-xs" onClick={() => runDeploy(selectedIds)} disabled={busy || !selectedCount}>
+              <button type="button" className="btn-primary text-xs" onClick={() => checkAndDeploy(selectedIds)} disabled={busy || !selectedCount}>
                 <Play size={13} /> Deploy Selected
               </button>
-              <button type="button" className="btn-secondary text-xs" onClick={() => runDeploy(endpoints.map((e) => e.id))} disabled={busy || !endpoints.length}>
+              <button type="button" className="btn-secondary text-xs" onClick={() => checkAndDeploy(endpoints.map((e) => e.id))} disabled={busy || !endpoints.length}>
                 <Play size={13} /> Deploy All
               </button>
               <button type="button" className="btn-secondary text-xs" onClick={() => runTest(selectedIds)} disabled={busy || !selectedCount}>
@@ -356,9 +399,14 @@ export default function SoftwareDeploymentPage() {
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') loadEndpoints(); }}
               />
-              <select className="input-field text-sm" value={osFilter} onChange={(e) => setOsFilter(e.target.value)}>
-                {OS_FILTERS.map((o) => <option key={o} value={o}>{o}</option>)}
-              </select>
+              <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden">
+                {OS_FILTERS.map((o) => (
+                  <button key={o} type="button" onClick={() => setOsFilter(o)}
+                    className={`px-3 py-1.5 text-xs font-semibold transition-colors ${osFilter === o ? 'bg-slate-800 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                    {o}
+                  </button>
+                ))}
+              </div>
               <button type="button" className="btn-secondary text-xs" onClick={loadEndpoints} disabled={loading || busy || verifyBusy}>
                 <RefreshCw size={13} /> Search & Load
               </button>
@@ -456,9 +504,14 @@ export default function SoftwareDeploymentPage() {
                   onChange={(e) => setSearch(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') loadEndpoints(); }}
                 />
-                <select className="input-field text-sm" value={osFilter} onChange={(e) => setOsFilter(e.target.value)}>
-                  {OS_FILTERS.map((o) => <option key={o} value={o}>{o}</option>)}
-                </select>
+                <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden">
+                  {OS_FILTERS.map((o) => (
+                    <button key={o} type="button" onClick={() => setOsFilter(o)}
+                      className={`px-3 py-1.5 text-xs font-semibold transition-colors ${osFilter === o ? 'bg-slate-800 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                      {o}
+                    </button>
+                  ))}
+                </div>
                 <button type="button" className="btn-secondary text-xs" onClick={loadEndpoints} disabled={loading || verifyBusy || busy}>
                   <RefreshCw size={13} /> Search & Load
                 </button>
@@ -628,9 +681,27 @@ export default function SoftwareDeploymentPage() {
             <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-semibold">Configuration</p>
             <p className="font-semibold text-gray-800 -mt-2">Installer Settings</p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="md:col-span-2">
-                <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Windows installer (.exe)</p>
-                <input className="input-field text-sm" value={settings.windows_installer_path} onChange={(e) => setField('windows_installer_path', e.target.value)} placeholder="C:\\Path\\AgentSetup.exe" />
+              <div className="md:col-span-3">
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">ManageEngine Agent — Windows Region</p>
+                <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-4 space-y-3">
+                  <p className="text-xs text-gray-500">Select the target region. The corresponding installer path will be used for deployment.</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {REGIONS.map(region => {
+                      const key = `windows_installer_path_${region.toLowerCase()}`;
+                      const active = settings.windows_region === region;
+                      return (
+                        <div key={region} className={`flex items-center gap-2 p-2.5 rounded-lg border transition-colors ${active ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-white'}`}>
+                          <input type="radio" name="windows_region" className="accent-blue-600 flex-shrink-0"
+                            checked={active} onChange={() => setField('windows_region', region)} />
+                          <span className={`text-xs font-semibold w-20 flex-shrink-0 ${active ? 'text-blue-700' : 'text-gray-700'}`}>{region}</span>
+                          <input className="input-field text-xs flex-1 !py-1" placeholder="C:\Path\AgentSetup.exe"
+                            value={settings[key] || ''} onChange={e => setField(key, e.target.value)} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-gray-400">Active: <strong className="text-blue-600">{settings.windows_region}</strong> → {settings[`windows_installer_path_${(settings.windows_region||'burlington').toLowerCase()}`] || <span className="text-orange-500">path not set</span>}</p>
+                </div>
               </div>
               <div>
                 <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Windows primary port</p>
