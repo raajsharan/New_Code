@@ -137,19 +137,36 @@ router.get('/total-ips', auth, async (req, res) => {
 // GET /api/tenable/report
 router.get('/report', auth, async (req, res) => {
   try {
-    const [tenableR, assetsR, extR] = await Promise.all([
+    const [tenableR, assetsR, extR, locsR, deptsR] = await Promise.all([
       pool.query('SELECT * FROM tenable_assets'),
       pool.query(
-        `SELECT id, COALESCE(vm_name,'') AS vm_name, COALESCE(os_hostname,'') AS os_hostname,
-                ip_address, asset_type, location, department
-         FROM assets WHERE ip_address IS NOT NULL AND ip_address <> ''`
+        `SELECT a.id, COALESCE(a.vm_name,'') AS vm_name, COALESCE(a.os_hostname,'') AS os_hostname,
+                a.ip_address, a.location_id, a.department_id,
+                COALESCE(at.name,'') AS asset_type,
+                COALESCE(l.name,'')  AS location,
+                COALESCE(d.name,'')  AS department
+         FROM assets a
+         LEFT JOIN asset_types  at ON at.id = a.asset_type_id
+         LEFT JOIN locations     l ON l.id  = a.location_id
+         LEFT JOIN departments   d ON d.id  = a.department_id
+         WHERE a.ip_address IS NOT NULL AND a.ip_address <> ''`
       ),
       extPool.query(
         `SELECT id, COALESCE(vm_name,'') AS vm_name, COALESCE(asset_name,'') AS asset_name,
-                ip_address, asset_type, location, department
+                ip_address, COALESCE(asset_type,'') AS asset_type,
+                location_id, department_id
          FROM items WHERE ip_address IS NOT NULL AND ip_address <> ''`
       ),
+      pool.query('SELECT id, name FROM locations'),
+      pool.query('SELECT id, name FROM departments'),
     ]);
+
+    const locMap  = Object.fromEntries(locsR.rows.map(r  => [r.id, r.name]));
+    const deptMap = Object.fromEntries(deptsR.rows.map(r => [r.id, r.name]));
+    extR.rows.forEach(r => {
+      r.location   = locMap[r.location_id]   || '';
+      r.department = deptMap[r.department_id] || '';
+    });
 
     const tenableMap       = new Map(tenableR.rows.map(r => [r.ip_address, r]));
     const matched          = [];
