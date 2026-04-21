@@ -280,3 +280,15 @@ export const auditAPI = {
 export const importAuditAPI = {
   getReports: (params) => api.get('/import-audit', { params }),
 };
+
+export const tenableAPI = {
+  import: (file) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post('/tenable/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+  getImports:   ()  => api.get('/tenable/imports'),
+  deleteImport: (id) => api.delete(`/tenable/imports/${id}`),
+  getReport:    ()  => api.get('/tenable/report'),
+  getTotalIPs:  ()  => api.get('/tenable/total-ips'),
+};

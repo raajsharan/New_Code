@@ -34,6 +34,7 @@ const NAV = [
   { to: '/physical-server-list',icon: Server,         label: 'Physical Servers',    key: 'physical-assets' },
   { to: '/configuration',      icon: Settings,        label: 'Inventory Config',    key: 'configuration' },
   { to: '/report-builder',     icon: BarChart2,       label: 'Report Builder',      key: 'report-builder' },
+  { to: '/tenable-report',     icon: ShieldCheck,     label: 'Tenable Report',      key: 'tenable-report' },
 ];
 
 const ADMIN_NAV = [
@@ -56,6 +57,7 @@ const ADMIN_NAV = [
   { to: '/physical-server-models',       icon: HardDrive,  label: 'Server Models',            key: 'physical-assets' },
   { to: '/extended-custom-fields',       icon: Database,   label: 'Extended Inv. Fields',     key: 'extended-custom-fields' },
   { to: '/column-config',                  icon: List,       label: 'Column Config',          key: 'column-config' },
+  { to: '/tenable-import',                 icon: DownloadCloud, label: 'Tenable Import',        key: 'tenable-import' },
 ];
 
 const roleBadgeCls = {

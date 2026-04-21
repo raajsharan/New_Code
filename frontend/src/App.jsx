@@ -38,6 +38,8 @@ import NewAssetImportPage from './pages/NewAssetImportPage';
 import ExcelSmartImportPage from './pages/ExcelSmartImportPage';
 import ImportAuditReportPage from './pages/ImportAuditReportPage';
 import SoftwareDeploymentPage from './pages/SoftwareDeploymentPage';
+import TenableReportPage from './pages/TenableReportPage';
+import TenableImportPage from './pages/TenableImportPage';
 
 function FullPageLoader({ label = 'Loading' }) {
   return (
@@ -118,6 +120,8 @@ function AppRoutes() {
         <Route path="column-config"                    element={<Guard adminOnly pageKey="column-config"><ColumnConfigPage /></Guard>} />
         <Route path="report-builder"                   element={<Guard pageKey="report-builder"><ReportBuilderPage /></Guard>} />
         <Route path="software-deployment"              element={<Guard adminOnly pageKey="software-deployment"><SoftwareDeploymentPage /></Guard>} />
+        <Route path="tenable-report" element={<Guard pageKey="tenable-report"><TenableReportPage /></Guard>} />
+        <Route path="tenable-import" element={<Guard adminOnly pageKey="tenable-import"><TenableImportPage /></Guard>} />
         <Route path="assets/:id"                     element={<Guard pageKey="asset-list"><AssetDetailPage /></Guard>} />
         <Route path="ext-assets/:id"                 element={<Guard pageKey="extended-inventory"><ExtAssetDetailPage /></Guard>} />
       </Route>
