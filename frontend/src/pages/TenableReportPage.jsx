@@ -3,6 +3,25 @@ import { Search, Download, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { tenableAPI } from '../services/api';
 
+function timeAgo(dateStr) {
+  if (!dateStr) return '—';
+  const date = new Date(dateStr);
+  if (isNaN(date)) return dateStr;
+  const diff = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (diff < 60)    return `${diff}s ago`;
+  if (diff < 3600)  return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  const days = Math.floor(diff / 86400);
+  return `${days} day${days !== 1 ? 's' : ''} ago`;
+}
+
+function fmtDate(dateStr) {
+  if (!dateStr) return '—';
+  const date = new Date(dateStr);
+  if (isNaN(date)) return dateStr;
+  return dateStr.replace('T', ' ').split('.')[0]; // 2026-04-21 11:00:47
+}
+
 const TABS = [
   { id: 'matched',        label: 'Matched',        desc: 'Found in both Tenable & Inventory' },
   { id: 'not_in_tenable', label: 'Not in Tenable', desc: 'Inventory IPs missing from Tenable' },
@@ -240,7 +259,7 @@ export default function TenableReportPage() {
                       <td className="table-td text-xs text-gray-700">{r.tenable_host_name || '—'}</td>
                       <td className="table-td text-xs text-gray-700">{r.tenable_name || '—'}</td>
                       <td className="table-td font-mono text-xs text-gray-500">{r.tenable_mac || '—'}</td>
-                      <td className="table-td text-xs text-gray-500">{r.tenable_last_observed || '—'}</td>
+                      <td className="table-td text-xs text-gray-500" title={fmtDate(r.tenable_last_observed)}>{timeAgo(r.tenable_last_observed)}</td>
                       <td className="table-td text-xs text-gray-600 max-w-[140px] truncate" title={r.tenable_os}>{r.tenable_os || '—'}</td>
                     </>}
                     {tab === 'not_in_tenable' && <>
@@ -264,7 +283,7 @@ export default function TenableReportPage() {
                       <td className="table-td text-xs text-gray-700">{r.name || '—'}</td>
                       <td className="table-td font-mono text-xs text-gray-500">{r.display_mac_address || '—'}</td>
                       <td className="table-td text-xs text-gray-400 max-w-[160px] truncate" title={r.ipv4_addresses}>{r.ipv4_addresses || '—'}</td>
-                      <td className="table-td text-xs text-gray-500">{r.last_observed || '—'}</td>
+                      <td className="table-td text-xs text-gray-500" title={fmtDate(r.last_observed)}>{timeAgo(r.last_observed)}</td>
                       <td className="table-td text-xs text-gray-600 max-w-[150px] truncate" title={r.operating_systems}>{r.operating_systems || '—'}</td>
                     </>}
                   </tr>
