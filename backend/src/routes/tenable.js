@@ -7,7 +7,8 @@ const { auth, requireAdmin } = require('../middleware/auth');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
-const IP_RE = /^(192\.168\.|10\.)\d{1,3}\.\d{1,3}$/;
+// 192.168.x.x = 2 octets after prefix; 10.x.x.x = 3 octets after prefix
+const IP_RE = /^192\.168\.\d{1,3}\.\d{1,3}$|^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
 
 function extractIPs(str) {
   if (!str) return [];
@@ -222,7 +223,7 @@ router.get('/report', auth, async (req, res) => {
       tenable_only:   tenableOnly,
       summary: {
         total_tenable_ips:    tenableMap.size,
-        matched_count:        matched.length,
+        matched_count:        coveredTenableIPs.size,   // unique Tenable IPs matched
         not_in_tenable_count: notInTenable.length,
         tenable_only_count:   tenableOnly.length,
       },
