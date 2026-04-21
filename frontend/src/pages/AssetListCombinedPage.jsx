@@ -4,6 +4,7 @@ import { assetsAPI, dropdownsAPI, settingsAPI } from '../services/api';
 import { displayText, isBlankLike } from '../services/displayText';
 import { useAuth } from '../context/AuthContext';
 import { useConfig } from '../context/ConfigContext';
+import { useDeleteConfirm } from '../context/DeleteConfirmContext';
 import { RenderCustomField } from '../components/CustomFieldEditor';
 import { MEIcon, TenableIcon } from '../components/AgentIcon';
 import AssetTagWidget from '../components/AssetTagWidget';
@@ -501,6 +502,7 @@ function mergeAssetColConfig(saved){
 
 function AssetListTab({ onEdit, refreshKey }) {
   const { canWrite, user, canViewPage } = useAuth();
+  const { requestDelete } = useDeleteConfirm();
   const ROW_LIMIT_OPTIONS = [50, 80, 100, 150, 200];
   const { configVersion } = useConfig();
   const navigate = useNavigate();
@@ -555,7 +557,7 @@ function AssetListTab({ onEdit, refreshKey }) {
   useEffect(()=>{fetchAssets();},[fetchAssets,configVersion,refreshKey]);
 
   const setFilter=(k,v)=>{setFilters(p=>({...p,[k]:v}));setPage(1);};
-  const handleDelete=async(a)=>{if(!confirm(`Delete "${a.vm_name||a.os_hostname}"?`))return;try{await assetsAPI.delete(a.id);toast.success('Deleted');fetchAssets();}catch(err){toast.error(err.response?.data?.error||'Delete failed');}};
+  const handleDelete=(a)=>{requestDelete(a.vm_name||a.os_hostname||'this asset',async()=>{try{await assetsAPI.delete(a.id);toast.success('Deleted');fetchAssets();}catch(err){toast.error(err.response?.data?.error||'Delete failed');}});};
   const handleExport=async()=>{setExporting(true);try{const params={...filters};Object.keys(params).forEach(k=>{if(!params[k])delete params[k];});const r=await assetsAPI.exportCSV(params);const url=URL.createObjectURL(new Blob([r.data],{type:'text/csv'}));const a=document.createElement('a');a.href=url;a.download=`inventory-${new Date().toISOString().split('T')[0]}.csv`;a.click();URL.revokeObjectURL(url);toast.success('Exported');}catch{toast.error('Export failed');}finally{setExporting(false);}};
   const canBulkUpdate = canWrite && canViewPage('asset-bulk-update');
   const setBulkField = (k, v) => setBulkPatch(prev => ({ ...prev, [k]: v }));

@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { settingsAPI } from '../services/api';
 import { useBranding } from '../context/BrandingContext';
+import { useDeleteConfirm } from '../context/DeleteConfirmContext';
 import toast from 'react-hot-toast';
 import { Palette, Save, Upload, Trash2, Image, Eye } from 'lucide-react';
 
 export default function BrandingPage() {
   const { updateBranding } = useBranding();
+  const { requestDelete } = useDeleteConfirm();
   const [form, setForm] = useState({ app_name: '', company_name: '', theme_color: '#1e40af', me_agent_icon_url: '', tenable_agent_icon_url: '' });
   const [logoData, setLogoData] = useState('');
   const [logoFilename, setLogoFilename] = useState('');
@@ -53,13 +55,14 @@ export default function BrandingPage() {
     finally { setUploading(false); e.target.value = ''; }
   };
 
-  const handleLogoDelete = async () => {
-    if (!confirm('Remove current logo?')) return;
-    try {
-      await settingsAPI.deleteLogo();
-      setLogoData(''); setLogoFilename(''); setPreviewLogo('');
-      toast.success('Logo removed');
-    } catch { toast.error('Remove failed'); }
+  const handleLogoDelete = () => {
+    requestDelete('current logo', async () => {
+      try {
+        await settingsAPI.deleteLogo();
+        setLogoData(''); setLogoFilename(''); setPreviewLogo('');
+        toast.success('Logo removed');
+      } catch { toast.error('Remove failed'); }
+    });
   };
 
   if (loading) return <div className="card h-48 animate-pulse bg-gray-100" />;

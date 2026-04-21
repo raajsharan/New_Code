@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { authAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useDeleteConfirm } from '../context/DeleteConfirmContext';
 import Toggle from '../components/Toggle';
 import toast from 'react-hot-toast';
 import {
@@ -48,6 +49,7 @@ function PasswordStrength({ password }) {
 
 // ── Avatar display / upload ───────────────────────────────────────────────────
 function AvatarSection({ user, onAvatarChange }) {
+  const { requestDelete } = useDeleteConfirm();
   const fileRef = useRef(null);
   const [uploading, setUploading] = useState(false);
 
@@ -68,13 +70,14 @@ function AvatarSection({ user, onAvatarChange }) {
     finally { setUploading(false); e.target.value = ''; }
   };
 
-  const handleRemove = async () => {
-    if (!confirm('Remove your profile picture?')) return;
-    try {
-      await authAPI.deleteAvatar();
-      onAvatarChange('');
-      toast.success('Profile picture removed');
-    } catch { toast.error('Remove failed'); }
+  const handleRemove = () => {
+    requestDelete('your profile picture', async () => {
+      try {
+        await authAPI.deleteAvatar();
+        onAvatarChange('');
+        toast.success('Profile picture removed');
+      } catch { toast.error('Remove failed'); }
+    });
   };
 
   return (

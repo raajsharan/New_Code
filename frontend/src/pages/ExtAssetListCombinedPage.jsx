@@ -4,6 +4,7 @@ import { extendedInventoryAPI, dropdownsAPI, settingsAPI } from '../services/api
 import { displayText, isBlankLike } from '../services/displayText';
 import { useAuth } from '../context/AuthContext';
 import { useConfig } from '../context/ConfigContext';
+import { useDeleteConfirm } from '../context/DeleteConfirmContext';
 import { RenderCustomField } from '../components/CustomFieldEditor';
 import { MEIcon, TenableIcon } from '../components/AgentIcon';
 import AssetTagWidget from '../components/AssetTagWidget';
@@ -471,6 +472,7 @@ function ExtListTab({ onEdit, refreshKey }) {
   const [customFields, setCustomFields] = useState([]);
   const [colConfig, setColConfig]  = useState(EXT_COL_DEFAULTS);
   const [filters, setFilters]     = useState({search:'',location:'',department:'',server_status:'',asset_type:''});
+  const { requestDelete } = useDeleteConfirm();
 
   const fetchMeta = useCallback(async () => {
     try {
@@ -499,7 +501,8 @@ function ExtListTab({ onEdit, refreshKey }) {
   useEffect(()=>{fetchItems();},[fetchItems,configVersion,refreshKey]);
 
   const setFilter=(k,v)=>{setFilters(p=>({...p,[k]:v}));setPage(1);};
-  const handleDelete=async(item)=>{if(!confirm(`Delete "${item.vm_name||item.asset_name||item.ip_address}"?`))return;try{await extendedInventoryAPI.delete(item.id);toast.success('Deleted');fetchItems();}catch(err){toast.error(err.response?.data?.error||'Failed');}};
+  const handleDelete=(item)=>{requestDelete(item.vm_name||item.asset_name||item.ip_address||'this item',async()=>{try{await extendedInventoryAPI.delete(item.id);toast.success('Deleted');fetchItems();}catch(err){toast.error(err.response?.data?.error||'Failed');}});};
+
   const handleExport=async()=>{setExporting(true);try{const r=await extendedInventoryAPI.exportCSV({...filters});const url=URL.createObjectURL(new Blob([r.data],{type:'text/csv'}));const a=document.createElement('a');a.href=url;a.download=`extended-inventory-${new Date().toISOString().split('T')[0]}.csv`;a.click();URL.revokeObjectURL(url);toast.success('Exported');}catch{toast.error('Export failed');}finally{setExporting(false);}};
   const totalPages=Math.ceil(total/limit);
   const COL_VM=160,COL_IP=120;

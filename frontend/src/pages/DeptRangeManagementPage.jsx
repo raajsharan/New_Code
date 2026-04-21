@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { deptRangesAPI, dropdownsAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useDeleteConfirm } from '../context/DeleteConfirmContext';
 import toast from 'react-hot-toast';
 import {
   Tag, Plus, Edit2, Trash2, Save, X, RefreshCw,
@@ -367,6 +368,7 @@ function RangeCard({ range, onEdit, onDelete, onViewTags, isViewing, tagUsage, t
 // ─────────────────────────────────────────────────────────────
 export default function DeptRangeManagementPage() {
   const { isAdmin } = useAuth();
+  const { requestDelete } = useDeleteConfirm();
   const [ranges, setRanges]       = useState([]);
   const [allDepts, setAllDepts]   = useState([]);
   const [overlaps, setOverlaps]   = useState([]);
@@ -413,20 +415,17 @@ export default function DeptRangeManagementPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleDelete = async (range) => {
-    if (range.used_count > 0) {
-      const ok = window.confirm(
-        `"${range.department_name}" has ${range.used_count} asset(s) with assigned tags in this range.\n\nDeleting the range will NOT remove those assets, but the tag validation logic will no longer recognize this department's range.\n\nProceed?`
-      );
-      if (!ok) return;
-    } else {
-      if (!window.confirm(`Delete range for "${range.department_name}"?`)) return;
-    }
-    try {
-      await deptRangesAPI.delete(range.id, range.used_count > 0);
-      toast.success(`Range for "${range.department_name}" deleted`);
-      fetchAll();
-    } catch (err) { toast.error(err.response?.data?.error || 'Delete failed'); }
+  const handleDelete = (range) => {
+    const label = range.used_count > 0
+      ? `range for "${range.department_name}" (${range.used_count} asset(s) assigned — their tags won't be validated after deletion)`
+      : `range for "${range.department_name}"`;
+    requestDelete(label, async () => {
+      try {
+        await deptRangesAPI.delete(range.id, range.used_count > 0);
+        toast.success(`Range for "${range.department_name}" deleted`);
+        fetchAll();
+      } catch (err) { toast.error(err.response?.data?.error || 'Delete failed'); }
+    });
   };
 
   const handleSaved = () => {

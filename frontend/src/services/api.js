@@ -31,6 +31,7 @@ export const authAPI = {
   },
   deleteAvatar: () => api.delete('/auth/profile/avatar'),
   changePassword: (d) => api.put('/auth/change-password', d),
+  verifyPassword: (password) => api.post('/auth/verify-password', { password }),
 };
 
 export const dashboardAPI = {

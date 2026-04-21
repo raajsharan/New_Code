@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { physicalAssetsAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useDeleteConfirm } from '../context/DeleteConfirmContext';
 import toast from 'react-hot-toast';
 import {
   HardDrive, Plus, Edit2, Trash2, Save, X,
@@ -76,6 +77,7 @@ function ModelForm({ initial = {}, onSave, onCancel, saving }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function PhysicalServerModelsPage() {
   const { canWrite, isAdmin } = useAuth();
+  const { requestDelete } = useDeleteConfirm();
   const navigate = useNavigate();
 
   const [models,  setModels]  = useState([]);
@@ -144,19 +146,18 @@ export default function PhysicalServerModelsPage() {
   };
 
   // ── Delete ────────────────────────────────────────────────────────────────
-  const handleDelete = async (m) => {
+  const handleDelete = (m) => {
     const count = usageMap[m.id] || 0;
-    const warning = count > 0
-      ? `\n\n⚠️ This model is currently assigned to ${count} server${count > 1 ? 's' : ''}. Those servers will have their model cleared.`
-      : '';
-    if (!confirm(`Delete model "${m.manufacturer ? m.manufacturer + ' ' : ''}${m.name}"?${warning}`)) return;
-    try {
-      await physicalAssetsAPI.deleteModel(m.id);
-      toast.success('Model deleted');
-      fetchAll();
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Delete failed');
-    }
+    const label = `model "${m.manufacturer ? m.manufacturer + ' ' : ''}${m.name}"${count > 0 ? ` (assigned to ${count} server${count > 1 ? 's' : ''})` : ''}`;
+    requestDelete(label, async () => {
+      try {
+        await physicalAssetsAPI.deleteModel(m.id);
+        toast.success('Model deleted');
+        fetchAll();
+      } catch (err) {
+        toast.error(err.response?.data?.error || 'Delete failed');
+      }
+    });
   };
 
   // ── Render ────────────────────────────────────────────────────────────────

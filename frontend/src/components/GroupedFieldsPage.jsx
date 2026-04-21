@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Toggle from './Toggle';
+import { useDeleteConfirm } from '../context/DeleteConfirmContext';
 import toast from 'react-hot-toast';
 import { GripVertical, ChevronDown, ChevronUp, Lock, Plus, Info } from 'lucide-react';
 
@@ -21,6 +22,7 @@ export function TypeBadge({ type }) {
 
 // ── Inline edit row for a custom field ───────────────────────────────────────
 function CustomRow({ field, canWrite, onUpdate, onDelete, allGroupNames }) {
+  const { requestDelete } = useDeleteConfirm();
   const [editing, setEditing] = useState(false);
   const [form, setForm]       = useState({});
   const [saving, setSaving]   = useState(false);
@@ -56,10 +58,11 @@ function CustomRow({ field, canWrite, onUpdate, onDelete, allGroupNames }) {
     finally { setSaving(false); }
   };
 
-  const del = async () => {
-    if (!confirm(`Delete "${field.field_label}"?`)) return;
-    try { await onDelete(field.id); toast.success('Deleted'); }
-    catch { toast.error('Delete failed'); }
+  const del = () => {
+    requestDelete(field.field_label, async () => {
+      try { await onDelete(field.id); toast.success('Deleted'); }
+      catch { toast.error('Delete failed'); }
+    });
   };
 
   if (editing) {

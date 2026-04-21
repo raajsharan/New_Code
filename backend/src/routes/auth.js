@@ -154,6 +154,19 @@ router.delete('/profile/avatar', auth, async (req, res) => {
   } catch { res.status(500).json({ error: 'Server error' }); }
 });
 
+// ── Verify password (used for delete confirmations) ───────────────────────────
+router.post('/verify-password', auth, async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password) return res.status(400).json({ error: 'Password required' });
+    const r = await pool.query('SELECT password_hash FROM users WHERE id=$1', [req.user.id]);
+    if (!r.rows.length) return res.status(404).json({ error: 'User not found' });
+    const valid = await bcrypt.compare(password, r.rows[0].password_hash);
+    if (!valid) return res.status(401).json({ error: 'Incorrect password' });
+    res.json({ valid: true });
+  } catch { res.status(500).json({ error: 'Server error' }); }
+});
+
 // ── Change password ───────────────────────────────────────────────────────────
 router.put('/change-password', auth, async (req, res) => {
   try {

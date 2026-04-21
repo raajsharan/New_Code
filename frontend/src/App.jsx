@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ConfigProvider } from './context/ConfigContext';
 import { BrandingProvider } from './context/BrandingContext';
+import { DeleteConfirmProvider } from './context/DeleteConfirmContext';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -65,7 +66,7 @@ function Guard({ children, pageKey, adminOnly }) {
 function Blocked({ msg }) {
   return (
     <div className="flex flex-col items-center justify-center min-h-[400px] gap-3">
-      <div className="text-5xl">¿</div>
+      <div className="text-5xl">ï¿½</div>
       <p className="text-lg font-semibold text-gray-700">Access Restricted</p>
       <p className="text-sm text-gray-500">{msg}</p>
     </div>
@@ -86,7 +87,7 @@ function AppRoutes() {
         {/* Combined pages */}
         <Route path="asset-list"       element={<Guard pageKey="asset-list"><AssetListCombinedPage /></Guard>} />
         <Route path="ext-asset-list"   element={<Guard pageKey="extended-inventory"><ExtAssetListCombinedPage /></Guard>} />
-        {/* Legacy routes ¿ redirect to combined pages */}
+        {/* Legacy routes ï¿½ redirect to combined pages */}
         <Route path="add-asset"              element={<Navigate to="/asset-list?tab=add" replace />} />
         <Route path="add-extended-inventory" element={<Navigate to="/ext-asset-list?tab=add" replace />} />
         <Route path="extended-inventory"     element={<Navigate to="/ext-asset-list?tab=list" replace />} />
@@ -131,8 +132,10 @@ export default function App() {
       <BrandingProvider>
         <ConfigProvider>
           <BrowserRouter>
-            <Toaster position="top-right" toastOptions={{ duration: 4000, style: { fontSize: '13px' } }} />
-            <AppRoutes />
+            <DeleteConfirmProvider>
+              <Toaster position="top-right" toastOptions={{ duration: 4000, style: { fontSize: '13px' } }} />
+              <AppRoutes />
+            </DeleteConfirmProvider>
           </BrowserRouter>
         </ConfigProvider>
       </BrandingProvider>

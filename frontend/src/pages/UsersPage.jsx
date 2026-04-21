@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { usersAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useDeleteConfirm } from '../context/DeleteConfirmContext';
 import toast from 'react-hot-toast';
 import { Plus, Edit2, Trash2, Save, X, UserPlus, Star, KeyRound } from 'lucide-react';
 
@@ -13,6 +14,7 @@ const roleBadge = (role) => ({
 
 export default function UsersPage() {
   const { isSuperAdmin } = useAuth();
+  const { requestDelete } = useDeleteConfirm();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editId, setEditId] = useState(null);
@@ -44,13 +46,14 @@ export default function UsersPage() {
     } catch { toast.error('Update failed'); }
   };
 
-  const handleDelete = async (user) => {
-    if (!confirm(`Delete user "${user.username}"? This cannot be undone.`)) return;
-    try {
-      await usersAPI.delete(user.id);
-      toast.success('User deleted');
-      fetchUsers();
-    } catch (err) { toast.error(err.response?.data?.error || 'Delete failed'); }
+  const handleDelete = (user) => {
+    requestDelete(`user "${user.username}"`, async () => {
+      try {
+        await usersAPI.delete(user.id);
+        toast.success('User deleted');
+        fetchUsers();
+      } catch (err) { toast.error(err.response?.data?.error || 'Delete failed'); }
+    });
   };
 
   const handleResetPassword = async () => {

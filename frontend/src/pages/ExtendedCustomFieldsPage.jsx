@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { extendedInventoryAPI, settingsAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useConfig } from '../context/ConfigContext';
+import { useDeleteConfirm } from '../context/DeleteConfirmContext';
 import Toggle from '../components/Toggle';
 import toast from 'react-hot-toast';
 import { Layers, X, Type, ListFilter, GripVertical, ChevronDown, ChevronUp, Info, Lock, Plus, Edit2, Trash2, ArrowRight, Save, MoveRight } from 'lucide-react';
@@ -133,6 +134,7 @@ function BuiltInFieldTypeEditor({ scope, fieldTypeOverrides, onSave, saving }) {
 }
 
 function CustomFieldRow({ field, canWrite, onRefresh, allGroupNames }) {
+  const { requestDelete } = useDeleteConfirm();
   const [editing, setEditing] = useState(false);
   const [form, setForm]       = useState({});
   const [saving, setSaving]   = useState(false);
@@ -154,10 +156,11 @@ function CustomFieldRow({ field, canWrite, onRefresh, allGroupNames }) {
     finally { setSaving(false); }
   };
 
-  const handleDelete = async () => {
-    if (!confirm(`Delete "${field.field_label}"?`)) return;
-    try { await extendedInventoryAPI.deleteCustomField(field.id); toast.success('Deleted'); onRefresh(); }
-    catch { toast.error('Delete failed'); }
+  const handleDelete = () => {
+    requestDelete(field.field_label, async () => {
+      try { await extendedInventoryAPI.deleteCustomField(field.id); toast.success('Deleted'); onRefresh(); }
+      catch { toast.error('Delete failed'); }
+    });
   };
 
   if (editing) {

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Toggle from './Toggle';
+import { useDeleteConfirm } from '../context/DeleteConfirmContext';
 import toast from 'react-hot-toast';
 import { Plus, Trash2, Edit2, Save, X, ChevronDown, ChevronUp, GripVertical } from 'lucide-react';
 
@@ -62,6 +63,7 @@ export default function CustomFieldEditor({
   canWrite,
   title = 'Custom Fields'
 }) {
+  const { requestDelete } = useDeleteConfirm();
   const INIT = { field_label: '', field_key: '', field_type: 'textbox', field_options: '', field_group: 'General', is_active: true, sort_order: 0 };
   const [form, setForm]       = useState(INIT);
   const [editId, setEditId]   = useState(null);
@@ -103,10 +105,11 @@ export default function CustomFieldEditor({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleDelete = async (field) => {
-    if (!confirm(`Delete field "${field.field_label}"?`)) return;
-    try { await onDelete(field.id); toast.success('Deleted'); }
-    catch (err) { toast.error(err?.response?.data?.error || 'Delete failed'); }
+  const handleDelete = (field) => {
+    requestDelete(field.field_label, async () => {
+      try { await onDelete(field.id); toast.success('Deleted'); }
+      catch (err) { toast.error(err?.response?.data?.error || 'Delete failed'); }
+    });
   };
 
   const toggleGroup = (g) => setExpandedGroups(p => ({ ...p, [g]: !p[g] }));

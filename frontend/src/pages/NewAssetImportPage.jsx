@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { vmwareAPI } from '../services/api';
 import { settingsAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useDeleteConfirm } from '../context/DeleteConfirmContext';
 import {
   AlertCircle, CheckCircle2, ChevronDown, ChevronUp,
   Clock3, Download, DownloadCloud, Plus, RefreshCw, Save, Server, Trash2, Upload, Wifi,
@@ -83,6 +84,7 @@ function TestResultBadge({ result, onClear }) {
 
 export default function NewAssetImportPage() {
   const { isAdmin } = useAuth();
+  const { requestDelete } = useDeleteConfirm();
   const [sources, setSources] = useState([]);
   const [schedule, setSchedule] = useState({ enabled: false, interval_minutes: 60 });
   const [candidates, setCandidates] = useState([]);
@@ -201,15 +203,16 @@ export default function NewAssetImportPage() {
     }
   };
 
-  const removeSource = async (id) => {
-    if (!confirm('Delete this source?')) return;
-    try {
-      await vmwareAPI.deleteSource(id);
-      toast.success('Source deleted');
-      await loadAll();
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Delete failed');
-    }
+  const removeSource = (id, name) => {
+    requestDelete(name || 'this source', async () => {
+      try {
+        await vmwareAPI.deleteSource(id);
+        toast.success('Source deleted');
+        await loadAll();
+      } catch (err) {
+        toast.error(err.response?.data?.error || 'Delete failed');
+      }
+    });
   };
 
   const toggleSource = async (src) => {
@@ -441,7 +444,7 @@ export default function NewAssetImportPage() {
                       <button className="btn-secondary text-xs" onClick={() => toggleSource(s)}>
                         {s.is_active ? 'Deactivate' : 'Activate'}
                       </button>
-                      <button className="p-1.5 text-red-600 hover:bg-red-50 rounded" onClick={() => removeSource(s.id)} title="Delete Source">
+                      <button className="p-1.5 text-red-600 hover:bg-red-50 rounded" onClick={() => removeSource(s.id, s.name || s.vcenter_host)} title="Delete Source">
                         <Trash2 size={13} />
                       </button>
                     </div>

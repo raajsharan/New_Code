@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { dropdownsAPI, settingsAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useConfig } from '../context/ConfigContext';
+import { useDeleteConfirm } from '../context/DeleteConfirmContext';
 import Toggle from '../components/Toggle';
 import toast from 'react-hot-toast';
 import { Plus, Edit2, Trash2, Save, X, ChevronDown, ChevronUp,
@@ -20,6 +21,7 @@ const TABLE_CONFIG = [
 ];
 
 function DropdownSection({ tableKey, label, items, canWrite, onRefresh }) {
+  const { requestDelete } = useDeleteConfirm();
   const [expanded, setExpanded] = useState(true);
   const [newName, setNewName] = useState('');
   const [editId, setEditId] = useState(null);
@@ -50,15 +52,16 @@ function DropdownSection({ tableKey, label, items, canWrite, onRefresh }) {
     } catch (err) { toast.error('Update failed'); }
   };
 
-  const handleDelete = async (id, name) => {
-    if (!confirm(`Delete "${name}"?`)) return;
-    try {
-      await dropdownsAPI.deleteItem(tableKey, id);
-      toast.success('Deleted');
-      onRefresh();
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Cannot delete (in use)');
-    }
+  const handleDelete = (id, name) => {
+    requestDelete(name, async () => {
+      try {
+        await dropdownsAPI.deleteItem(tableKey, id);
+        toast.success('Deleted');
+        onRefresh();
+      } catch (err) {
+        toast.error(err.response?.data?.error || 'Cannot delete (in use)');
+      }
+    });
   };
 
   return (
@@ -130,6 +133,7 @@ function DropdownSection({ tableKey, label, items, canWrite, onRefresh }) {
 }
 
 function OsVersionsSection({ dropdowns, canWrite, onRefresh }) {
+  const { requestDelete } = useDeleteConfirm();
   const [expanded, setExpanded] = useState(false);
   const [selectedType, setSelectedType] = useState('');
   const [newVersion, setNewVersion] = useState('');
@@ -159,12 +163,13 @@ function OsVersionsSection({ dropdowns, canWrite, onRefresh }) {
     } catch { toast.error('Update failed'); }
   };
 
-  const handleDelete = async (id, name) => {
-    if (!confirm(`Delete "${name}"?`)) return;
-    try {
-      await dropdownsAPI.deleteOsVersion(id);
-      toast.success('Deleted'); onRefresh();
-    } catch { toast.error('Delete failed'); }
+  const handleDelete = (id, name) => {
+    requestDelete(name, async () => {
+      try {
+        await dropdownsAPI.deleteOsVersion(id);
+        toast.success('Deleted'); onRefresh();
+      } catch { toast.error('Delete failed'); }
+    });
   };
 
   return (
@@ -240,6 +245,7 @@ function OsVersionsSection({ dropdowns, canWrite, onRefresh }) {
 
 // ── OME Status options manager ──────────────────────────────────────────────
 function OmeStatusSection({ canWrite, onRefresh }) {
+  const { requestDelete } = useDeleteConfirm();
   const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [newValue, setNewValue] = useState('');
@@ -273,8 +279,7 @@ function OmeStatusSection({ canWrite, onRefresh }) {
   };
 
   const handleDelete = (idx) => {
-    if (!confirm(`Remove "${options[idx].label}"?`)) return;
-    save(options.filter((_,i) => i !== idx));
+    requestDelete(options[idx].label, () => save(options.filter((_,i) => i !== idx)));
   };
 
   const handleEditSave = (idx) => {
@@ -357,6 +362,7 @@ function OmeStatusSection({ canWrite, onRefresh }) {
 
 //---------- EOL Status options manager --------------------------------------------
 function EolStatusSection({ canWrite, onRefresh }) {
+  const { requestDelete } = useDeleteConfirm();
   const DEFAULT_OPTIONS = ['InSupport', 'EOL', 'Decom', 'Not Applicable'];
   const [options, setOptions] = useState(DEFAULT_OPTIONS);
   const [overrides, setOverrides] = useState({});
@@ -423,8 +429,7 @@ function EolStatusSection({ canWrite, onRefresh }) {
   };
 
   const handleDelete = (idx) => {
-    if (!confirm(`Remove "${options[idx]}"?`)) return;
-    save(options.filter((_, i) => i !== idx));
+    requestDelete(options[idx], () => save(options.filter((_, i) => i !== idx)));
   };
 
   const handleEditSave = (idx) => {

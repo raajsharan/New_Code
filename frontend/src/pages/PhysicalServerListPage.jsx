@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { physicalAssetsAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useDeleteConfirm } from '../context/DeleteConfirmContext';
 import toast from 'react-hot-toast';
 import {
   Server, Download, Upload, RefreshCw, Search,
@@ -60,13 +61,14 @@ function ManageModelsPanel({ canWrite }) {
     finally { setSaving(false); }
   };
 
-  const handleDelete = async (m) => {
-    if (!confirm(`Delete model "${m.manufacturer ? m.manufacturer + ' ' : ''}${m.name}"? Servers using this model will have their model cleared.`)) return;
-    try {
-      await physicalAssetsAPI.deleteModel(m.id);
-      toast.success('Model deleted');
-      fetchModels();
-    } catch (err) { toast.error(err.response?.data?.error || 'Delete failed'); }
+  const handleDelete = (m) => {
+    requestDelete(`model "${m.manufacturer ? m.manufacturer + ' ' : ''}${m.name}"`, async () => {
+      try {
+        await physicalAssetsAPI.deleteModel(m.id);
+        toast.success('Model deleted');
+        fetchModels();
+      } catch (err) { toast.error(err.response?.data?.error || 'Delete failed'); }
+    });
   };
 
   return (
@@ -205,6 +207,7 @@ function ManageModelsPanel({ canWrite }) {
 
 export default function PhysicalServerListPage() {
   const { canWrite } = useAuth();
+  const { requestDelete } = useDeleteConfirm();
   const navigate     = useNavigate();
 
   const [servers, setServers]     = useState([]);
@@ -226,10 +229,11 @@ export default function PhysicalServerListPage() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  const handleDelete = async (s) => {
-    if (!confirm(`Delete physical server record for "${s.hosted_ip}"?`)) return;
-    try { await physicalAssetsAPI.delete(s.id); toast.success('Deleted'); fetchAll(); }
-    catch (err) { toast.error(err.response?.data?.error || 'Delete failed'); }
+  const handleDelete = (s) => {
+    requestDelete(`physical server record for "${s.hosted_ip}"`, async () => {
+      try { await physicalAssetsAPI.delete(s.id); toast.success('Deleted'); fetchAll(); }
+      catch (err) { toast.error(err.response?.data?.error || 'Delete failed'); }
+    });
   };
 
   const handleExport = async () => {
