@@ -508,3 +508,107 @@
   }
 }
 
+/* ── Login page animations ─────────────────────────────────────────────────── */
+@keyframes float-a {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  50%       { transform: translateY(-22px) scale(1.02); }
+}
+@keyframes float-b {
+  0%, 100% { transform: translateY(0px) translateX(0px); }
+  33%       { transform: translateY(-15px) translateX(10px); }
+  66%       { transform: translateY(-8px) translateX(-7px); }
+}
+@keyframes float-c {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(18px); }
+}
+@keyframes spin-slow   { to { transform: rotate(360deg); } }
+@keyframes spin-slow-r { to { transform: rotate(-360deg); } }
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.96) translateY(10px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.anim-float-a   { animation: float-a 7s ease-in-out infinite; }
+.anim-float-b   { animation: float-b 9s ease-in-out infinite; }
+.anim-float-c   { animation: float-c 11s ease-in-out infinite; }
+.anim-spin-slow   { animation: spin-slow   28s linear infinite; }
+.anim-spin-slow-r { animation: spin-slow-r 20s linear infinite; }
+.anim-fade-in-up  { animation: fade-in-up 0.6s ease-out both; }
+.anim-scale-in    { animation: scale-in 0.55s cubic-bezier(0.22,1,0.36,1) both; }
+
+.delay-1 { animation-delay: 0.12s; }
+.delay-2 { animation-delay: 0.24s; }
+.delay-3 { animation-delay: 0.36s; }
+.delay-4 { animation-delay: 0.50s; }
+.delay-5 { animation-delay: 0.65s; }
+
+/* ── Dark mode overrides ───────────────────────────────────────────────────── */
+.dark { color-scheme: dark; }
+
+.dark body {
+  background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+  color: #cbd5e1;
+}
+.dark .workspace-shell {
+  background: linear-gradient(180deg, rgba(15,23,42,0.98) 0%, rgba(30,41,59,0.98) 100%);
+  border-color: rgba(255,255,255,0.06);
+  box-shadow: 0 22px 44px rgba(0,0,0,0.45);
+}
+.dark .glass-panel {
+  background: rgba(15,23,42,0.92);
+  border-color: rgba(255,255,255,0.07);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.35);
+}
+.dark .card {
+  background: rgba(30,41,59,0.96);
+  border-color: rgba(255,255,255,0.07);
+  color: #cbd5e1;
+}
+.dark .input-field {
+  background: rgba(15,23,42,0.75);
+  border-color: rgba(255,255,255,0.13);
+  color: #e2e8f0;
+}
+.dark .btn-secondary {
+  background: rgba(30,41,59,0.9);
+  color: #e2e8f0;
+  border-color: rgba(255,255,255,0.1);
+}
+.dark .btn-secondary:hover { background: rgba(51,65,85,0.95); }
+.dark .table-th { color: rgba(148,163,184,0.88); }
+.dark .table-td { color: rgba(203,213,225,0.88); }
+
+/* Tailwind color class overrides in dark mode */
+.dark .bg-white            { background-color: rgb(15 23 42) !important; }
+.dark .bg-white\/95        { background-color: rgba(15,23,42,0.95) !important; }
+.dark .bg-white\/86        { background-color: rgba(15,23,42,0.88) !important; }
+.dark .bg-gray-50          { background-color: rgb(30 41 59) !important; }
+.dark .bg-gray-100         { background-color: rgb(30 41 59) !important; }
+.dark .bg-white\/35        { background-color: rgba(15,23,42,0.4) !important; }
+
+.dark .text-gray-900       { color: rgb(241 245 249) !important; }
+.dark .text-gray-800       { color: rgb(226 232 240) !important; }
+.dark .text-gray-700       { color: rgb(203 213 225) !important; }
+.dark .text-gray-600       { color: rgb(148 163 184) !important; }
+.dark .text-gray-500       { color: rgb(100 116 139) !important; }
+.dark .text-gray-400       { color: rgb(71 85 105) !important; }
+
+.dark .border-gray-200     { border-color: rgba(255,255,255,0.08) !important; }
+.dark .border-gray-100     { border-color: rgba(255,255,255,0.05) !important; }
+.dark .divide-gray-100 > * + * { border-color: rgba(255,255,255,0.05) !important; }
+.dark .divide-y             > * + * { border-color: rgba(255,255,255,0.05) !important; }
+
+.dark select, .dark textarea, .dark input[type="text"],
+.dark input[type="password"], .dark input[type="email"],
+.dark input[type="number"], .dark input[type="search"] {
+  background-color: rgba(15,23,42,0.7);
+  border-color: rgba(255,255,255,0.13);
+  color: #e2e8f0;
+}
+.dark select option { background-color: #1e293b; }
+
