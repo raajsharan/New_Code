@@ -678,16 +678,13 @@
 .dark .divide-gray-100 > * + * { border-color: rgba(255,255,255,0.05) !important; }
 .dark .divide-y             > * + * { border-color: rgba(255,255,255,0.05) !important; }
 
-/* Dashboard header gradient → replace light gradient stops with dark ones */
-.dark .from-slate-50 {
-  --tw-gradient-from: rgb(15 23 42) var(--tw-gradient-from-position) !important;
-  --tw-gradient-to: rgba(15,23,42,0) var(--tw-gradient-to-position) !important;
-}
-.dark .via-white {
-  --tw-gradient-via: rgb(20 30 50) var(--tw-gradient-via-position) !important;
-}
-.dark .to-blue-50 {
-  --tw-gradient-to: rgb(25 38 58) var(--tw-gradient-to-position) !important;
+/* Dashboard header: kill the light gradient, replace with a solid dark card */
+.dark .bg-gradient-to-r.from-slate-50,
+.dark .bg-gradient-to-br.from-slate-50,
+.dark .bg-gradient-to-r.from-slate-100,
+.dark .bg-gradient-to-br.from-slate-100 {
+  background-image: none !important;
+  background-color: rgb(22 32 50) !important;
 }
 
 .dark select, .dark textarea, .dark input[type="text"],
