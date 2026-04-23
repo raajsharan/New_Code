@@ -271,12 +271,180 @@ router.get('/export/csv', auth, async (req, res) => {
   }
 });
 
+// GET /api/beijing-assets/template
+router.get('/template', auth, (req, res) => {
+  const headers = [
+    'IP Address', 'VM Name', 'Hostname', 'Asset Type', 'OS Type', 'OS Version',
+    'Assigned User', 'Department', 'Location', 'Business Purpose', 'Server Status',
+    'Serial Number', 'EOL Status', 'Asset Tag', 'Additional Remarks',
+  ];
+  const csv = headers.join(',') + '\n';
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="beijing_assets_template.csv"');
+  res.send(csv);
+});
+
+// POST /api/beijing-assets/preview
+router.post('/preview', auth, requireAdmin, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const rows = parseFile(req.file.buffer, req.file.originalname);
+    if (!rows.length) return res.status(400).json({ error: 'File is empty or could not be parsed' });
+
+    const headers = Object.keys(rows[0]);
+    const headerMap = buildHeaderMap(headers);
+    const mappedFields = [...new Set(Object.values(headerMap))];
+    const unmappedColumns = headers.filter(h => !headerMap[h]);
+
+    const [assetsRes, extRes, beijingRes] = await Promise.all([
+      pool.query("SELECT LOWER(TRIM(ip_address)) AS ip FROM assets WHERE ip_address IS NOT NULL AND ip_address != ''"),
+      pool.query("SELECT LOWER(TRIM(ip_address)) AS ip FROM extended_inventory WHERE ip_address IS NOT NULL AND ip_address != ''"),
+      pool.query("SELECT LOWER(TRIM(ip_address)) AS ip FROM beijing_assets WHERE ip_address IS NOT NULL AND ip_address != ''"),
+    ]);
+    const existingIPs = new Set([...assetsRes.rows.map(r => r.ip), ...extRes.rows.map(r => r.ip)]);
+    const beijingIPs  = new Set(beijingRes.rows.map(r => r.ip));
+
+    const previewRows = rows.map((row, idx) => {
+      const mapped = {};
+      for (const [orig, field] of Object.entries(headerMap)) {
+        mapped[field] = String(row[orig] ?? '').trim();
+      }
+      const ip = (mapped.ip_address || '').trim();
+      const errors = [];
+      if (!ip) {
+        errors.push('Missing IP address');
+      } else if (existingIPs.has(ip.toLowerCase())) {
+        errors.push('Already exists in Asset List or Ext. Asset List');
+      } else if (beijingIPs.has(ip.toLowerCase())) {
+        errors.push('Already in Beijing Asset List');
+      }
+      return { row_number: idx + 1, data: mapped, errors, verified: errors.length === 0 };
+    });
+
+    const verifiedCount = previewRows.filter(r => r.verified).length;
+    res.json({
+      rows: previewRows,
+      verified_count: verifiedCount,
+      unverified_count: previewRows.length - verifiedCount,
+      mapped_fields: mappedFields,
+      unmapped_columns: unmappedColumns,
+      total_rows: previewRows.length,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/beijing-assets/import-selected
+router.post('/import-selected', auth, requireAdmin, async (req, res) => {
+  try {
+    const { rows } = req.body;
+    if (!Array.isArray(rows) || !rows.length) return res.status(400).json({ error: 'No rows provided' });
+
+    const batchId = crypto.randomUUID();
+    const [assetsRes, extRes, beijingRes] = await Promise.all([
+      pool.query("SELECT LOWER(TRIM(ip_address)) AS ip FROM assets WHERE ip_address IS NOT NULL AND ip_address != ''"),
+      pool.query("SELECT LOWER(TRIM(ip_address)) AS ip FROM extended_inventory WHERE ip_address IS NOT NULL AND ip_address != ''"),
+      pool.query("SELECT LOWER(TRIM(ip_address)) AS ip FROM beijing_assets WHERE ip_address IS NOT NULL AND ip_address != ''"),
+    ]);
+    const existingIPs = new Set([...assetsRes.rows.map(r => r.ip), ...extRes.rows.map(r => r.ip)]);
+    const beijingIPs  = new Set(beijingRes.rows.map(r => r.ip));
+
+    let added = 0;
+    const skipped = [];
+
+    for (const row of rows) {
+      const mapped = row.data || {};
+      const ip = (mapped.ip_address || '').trim();
+      if (!ip) { skipped.push({ row: row.row_number, reason: 'Missing IP' }); continue; }
+      const ipNorm = ip.toLowerCase();
+      if (existingIPs.has(ipNorm)) { skipped.push({ row: row.row_number, ip, reason: 'Already in Asset/Ext List' }); continue; }
+      if (beijingIPs.has(ipNorm)) { skipped.push({ row: row.row_number, ip, reason: 'Already in Beijing List' }); continue; }
+
+      await pool.query(
+        `INSERT INTO beijing_assets
+           (ip_address, vm_name, os_hostname, asset_type, os_type, os_version,
+            assigned_user, department, location, business_purpose, server_status,
+            serial_number, eol_status, asset_tag, additional_remarks,
+            import_source, import_batch_id, submitted_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+        [
+          ip,
+          mapped.vm_name          || null,
+          mapped.os_hostname      || null,
+          mapped.asset_type       || null,
+          mapped.os_type          || null,
+          mapped.os_version       || null,
+          mapped.assigned_user    || null,
+          mapped.department       || null,
+          mapped.location         || null,
+          mapped.business_purpose || null,
+          mapped.server_status    || null,
+          mapped.serial_number    || null,
+          mapped.eol_status       || null,
+          mapped.asset_tag        || null,
+          mapped.additional_remarks || null,
+          'excel-import', batchId,
+          req.user?.username || null,
+        ]
+      );
+      added++;
+      beijingIPs.add(ipNorm);
+    }
+
+    res.json({ added, skipped: skipped.length, skipped_details: skipped, batch_id: batchId });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // DELETE /api/beijing-assets/:id
 router.delete('/:id', auth, requireAdmin, async (req, res) => {
   try {
     const { rowCount } = await pool.query('DELETE FROM beijing_assets WHERE id = $1', [req.params.id]);
     if (!rowCount) return res.status(404).json({ error: 'Not found' });
     res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/beijing-assets/:id
+router.get('/:id', auth, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM beijing_assets WHERE id = $1', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/beijing-assets/:id
+router.put('/:id', auth, requireAdmin, async (req, res) => {
+  try {
+    const EDITABLE = [
+      'vm_name', 'os_hostname', 'ip_address', 'asset_type', 'os_type', 'os_version',
+      'assigned_user', 'department', 'location', 'business_purpose', 'server_status',
+      'serial_number', 'eol_status', 'asset_tag', 'additional_remarks',
+    ];
+    const updates = [];
+    const values  = [];
+    let idx = 1;
+    for (const f of EDITABLE) {
+      if (req.body[f] !== undefined) {
+        updates.push(`${f} = $${idx++}`);
+        values.push(req.body[f] || null);
+      }
+    }
+    if (!updates.length) return res.status(400).json({ error: 'No fields to update' });
+    values.push(req.params.id);
+    const { rows } = await pool.query(
+      `UPDATE beijing_assets SET ${updates.join(', ')}, updated_at=NOW() WHERE id = $${idx} RETURNING *`,
+      values
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

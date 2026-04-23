@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { beijingAssetsAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
@@ -31,6 +32,7 @@ function Pagination({ page, total, limit, onChange }) {
 
 export default function BeijingAssetListPage() {
   const { isAdmin } = useAuth();
+  const navigate = useNavigate();
 
   const [assets,   setAssets]   = useState([]);
   const [total,    setTotal]    = useState(0);
@@ -162,7 +164,11 @@ export default function BeijingAssetListPage() {
                   No assets found. Import an Excel file via Beijing Asset Import to get started.
                 </td></tr>
               ) : assets.map(a => (
-                <tr key={a.id} className={`hover:bg-gray-50 transition-colors ${a.is_migrated ? 'opacity-60' : ''}`}>
+                <tr
+                  key={a.id}
+                  className={`hover:bg-gray-50 transition-colors cursor-pointer ${a.is_migrated ? 'opacity-60' : ''}`}
+                  onClick={() => navigate(`/beijing-asset/${a.id}`)}
+                >
                   <td className="px-3 py-2.5 font-mono text-xs text-gray-800 whitespace-nowrap">{a.ip_address}</td>
                   <td className="px-3 py-2.5 text-gray-700 max-w-[140px] truncate">{a.vm_name || '—'}</td>
                   <td className="px-3 py-2.5 text-gray-600 max-w-[140px] truncate">{a.os_hostname || '—'}</td>
@@ -185,7 +191,7 @@ export default function BeijingAssetListPage() {
                     ) : '—'}
                   </td>
                   {isAdmin && (
-                    <td className="px-3 py-2.5">
+                    <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
                       {!a.is_migrated && (
                         <button onClick={() => handleDelete(a.id)}
                           className="text-gray-400 hover:text-red-500 transition-colors">

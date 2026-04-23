@@ -1,0 +1,302 @@
+import React, { useEffect, useState, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { beijingAssetsAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import toast from 'react-hot-toast';
+import {
+  ArrowLeft, Edit2, Save, X, Server, Building2, Shield,
+  RefreshCw, CheckCircle, Info, MapPin,
+} from 'lucide-react';
+
+const FIELDS = [
+  { key: 'vm_name',            label: 'VM Name',            mono: true },
+  { key: 'os_hostname',        label: 'OS Hostname',         mono: true },
+  { key: 'ip_address',         label: 'IP Address',          mono: true },
+  { key: 'asset_type',         label: 'Asset Type' },
+  { key: 'os_type',            label: 'OS Type' },
+  { key: 'os_version',         label: 'OS Version' },
+  { key: 'assigned_user',      label: 'Assigned User' },
+  { key: 'department',         label: 'Department' },
+  { key: 'location',           label: 'Location' },
+  { key: 'business_purpose',   label: 'Business Purpose' },
+  { key: 'server_status',      label: 'Server Status' },
+  { key: 'serial_number',      label: 'Serial Number',       mono: true },
+  { key: 'eol_status',         label: 'EOL Status' },
+  { key: 'asset_tag',          label: 'Asset Tag',           mono: true },
+  { key: 'additional_remarks', label: 'Additional Remarks',  multiline: true },
+];
+
+const eolCls = (s) => ({ InSupport: 'bg-green-100 text-green-700', EOL: 'bg-orange-100 text-orange-700', Decom: 'bg-red-100 text-red-700' }[s] || 'bg-gray-100 text-gray-500');
+const statusCls = (s) => ({ Alive: 'bg-green-100 text-green-700', 'Powered Off': 'bg-orange-100 text-orange-700', 'Not Alive': 'bg-red-100 text-red-700' }[s] || 'bg-gray-100 text-gray-500');
+
+function InfoRow({ label, value, mono, badge, badgeCls }) {
+  return (
+    <div className="flex items-start py-2 border-b border-gray-50 dark:border-slate-700/50 last:border-0">
+      <span className="text-xs font-medium text-gray-500 dark:text-slate-400 w-40 flex-shrink-0">{label}</span>
+      {badge
+        ? <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${badgeCls || 'bg-gray-100 text-gray-600'}`}>{value || '—'}</span>
+        : <span className={`text-sm text-gray-800 dark:text-slate-200 flex-1 ${mono ? 'font-mono' : ''} ${!value ? 'text-gray-400 dark:text-slate-500 italic' : ''}`}>{value || '—'}</span>}
+    </div>
+  );
+}
+
+function EditRow({ field, value, onChange }) {
+  if (field.multiline) {
+    return (
+      <div className="py-2 border-b border-gray-50 dark:border-slate-700/50 last:border-0">
+        <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1">{field.label}</label>
+        <textarea
+          className="input-field w-full text-sm resize-none"
+          rows={3}
+          value={value ?? ''}
+          onChange={e => onChange(field.key, e.target.value)}
+        />
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center py-2 border-b border-gray-50 dark:border-slate-700/50 last:border-0 gap-3">
+      <span className="text-xs font-medium text-gray-500 dark:text-slate-400 w-40 flex-shrink-0">{field.label}</span>
+      <input
+        className={`input-field flex-1 text-sm ${field.mono ? 'font-mono' : ''}`}
+        value={value ?? ''}
+        onChange={e => onChange(field.key, e.target.value)}
+      />
+    </div>
+  );
+}
+
+function Section({ icon: Icon, title, color = 'text-blue-700', children }) {
+  return (
+    <div className="card">
+      <h3 className="font-semibold text-gray-800 dark:text-slate-100 mb-3 flex items-center gap-2">
+        <Icon size={15} className={color} /> {title}
+      </h3>
+      <div>{children}</div>
+    </div>
+  );
+}
+
+export default function BeijingAssetDetailPage() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { isAdmin } = useAuth();
+
+  const [asset,   setAsset]   = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [form,    setForm]    = useState({});
+  const [saving,  setSaving]  = useState(false);
+
+  const fetchAsset = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await beijingAssetsAPI.getById(id);
+      setAsset(r.data);
+    } catch {
+      toast.error('Asset not found');
+      navigate('/beijing-asset-list');
+    } finally {
+      setLoading(false);
+    }
+  }, [id, navigate]);
+
+  useEffect(() => { fetchAsset(); }, [fetchAsset]);
+
+  function startEdit() {
+    setForm(
+      FIELDS.reduce((acc, f) => ({ ...acc, [f.key]: asset[f.key] ?? '' }), {})
+    );
+    setEditing(true);
+  }
+
+  function cancelEdit() {
+    setEditing(false);
+    setForm({});
+  }
+
+  function setField(key, val) {
+    setForm(prev => ({ ...prev, [key]: val }));
+  }
+
+  async function saveEdit() {
+    setSaving(true);
+    try {
+      const r = await beijingAssetsAPI.update(id, form);
+      setAsset(r.data);
+      setEditing(false);
+      setForm({});
+      toast.success('Asset updated');
+    } catch (e) {
+      toast.error(e.response?.data?.error || 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="max-w-5xl mx-auto animate-pulse space-y-4">
+        {Array(3).fill(0).map((_, i) => <div key={i} className="card h-32 bg-gray-100 dark:bg-slate-800" />)}
+      </div>
+    );
+  }
+  if (!asset) return null;
+
+  const title = asset.vm_name || asset.os_hostname || `Asset #${asset.id}`;
+
+  return (
+    <div className="max-w-5xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate(-1)}
+            className="p-2 text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg"
+          >
+            <ArrowLeft size={18} />
+          </button>
+          <div className="w-10 h-10 bg-blue-800 rounded-xl flex items-center justify-center">
+            <Server size={20} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-gray-800 dark:text-slate-100">{title}</h1>
+            <div className="flex items-center gap-2 mt-0.5">
+              <code className="text-sm font-mono text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded">
+                {asset.ip_address}
+              </code>
+              {asset.is_migrated
+                ? <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-medium">
+                    <CheckCircle size={10} /> Migrated
+                  </span>
+                : <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-medium">
+                    <Info size={10} /> Pending
+                  </span>}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button onClick={fetchAsset} className="btn-secondary text-xs p-2" title="Refresh">
+            <RefreshCw size={14} />
+          </button>
+          {isAdmin && !asset.is_migrated && !editing && (
+            <button onClick={startEdit} className="btn-primary text-xs">
+              <Edit2 size={13} /> Edit Asset
+            </button>
+          )}
+          {editing && (
+            <>
+              <button onClick={cancelEdit} className="btn-secondary text-xs">
+                <X size={13} /> Cancel
+              </button>
+              <button onClick={saveEdit} disabled={saving} className="btn-primary text-xs">
+                {saving ? <RefreshCw size={13} className="animate-spin" /> : <Save size={13} />}
+                {saving ? 'Saving…' : 'Save Changes'}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Quick stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        {[
+          { label: 'Asset Type', value: asset.asset_type,  cls: 'bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300' },
+          { label: 'OS',         value: [asset.os_type, asset.os_version].filter(Boolean).join(' · ') || '—', cls: 'bg-violet-50 dark:bg-violet-900/20 text-violet-800 dark:text-violet-300' },
+          { label: 'Department', value: asset.department,  cls: 'bg-teal-50 dark:bg-teal-900/20 text-teal-800 dark:text-teal-300' },
+          { label: 'Location',   value: asset.location,    cls: 'bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300' },
+        ].map(s => (
+          <div key={s.label} className={`rounded-xl p-3 ${s.cls}`}>
+            <p className="text-xs opacity-70 mb-0.5">{s.label}</p>
+            <p className="text-sm font-bold leading-tight">{s.value || '—'}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Detail cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+        {/* Basic Information */}
+        <Section icon={Server} title="Basic Information">
+          {editing ? (
+            ['vm_name', 'os_hostname', 'ip_address', 'asset_type', 'os_type', 'os_version'].map(k => (
+              <EditRow key={k} field={FIELDS.find(f => f.key === k)} value={form[k]} onChange={setField} />
+            ))
+          ) : (
+            <>
+              <InfoRow label="VM Name"     value={asset.vm_name}     mono />
+              <InfoRow label="OS Hostname" value={asset.os_hostname} mono />
+              <InfoRow label="IP Address"  value={asset.ip_address}  mono />
+              <InfoRow label="Asset Type"  value={asset.asset_type} />
+              <InfoRow label="OS Type"     value={asset.os_type} />
+              <InfoRow label="OS Version"  value={asset.os_version} />
+            </>
+          )}
+        </Section>
+
+        {/* Ownership */}
+        <Section icon={Building2} title="Ownership" color="text-teal-700">
+          {editing ? (
+            ['assigned_user', 'department', 'location', 'business_purpose', 'asset_tag', 'serial_number'].map(k => (
+              <EditRow key={k} field={FIELDS.find(f => f.key === k)} value={form[k]} onChange={setField} />
+            ))
+          ) : (
+            <>
+              <InfoRow label="Assigned User"    value={asset.assigned_user} />
+              <InfoRow label="Department"       value={asset.department} />
+              <InfoRow label="Location"         value={asset.location} />
+              <InfoRow label="Business Purpose" value={asset.business_purpose} />
+              <InfoRow label="Asset Tag"        value={asset.asset_tag}    mono />
+              <InfoRow label="Serial Number"    value={asset.serial_number} mono />
+            </>
+          )}
+        </Section>
+
+        {/* Status */}
+        <Section icon={Shield} title="Status" color="text-green-700">
+          {editing ? (
+            ['server_status', 'eol_status'].map(k => (
+              <EditRow key={k} field={FIELDS.find(f => f.key === k)} value={form[k]} onChange={setField} />
+            ))
+          ) : (
+            <>
+              <InfoRow label="Server Status" value={asset.server_status} badge badgeCls={statusCls(asset.server_status)} />
+              <InfoRow label="EOL Status"    value={asset.eol_status}    badge badgeCls={eolCls(asset.eol_status)} />
+            </>
+          )}
+        </Section>
+
+        {/* Import Info */}
+        <Section icon={MapPin} title="Import Info" color="text-indigo-700">
+          <InfoRow label="Import Source" value={asset.import_source} />
+          <InfoRow label="Import Batch"  value={asset.import_batch_id} mono />
+          <InfoRow label="Submitted By"  value={asset.submitted_by} />
+          <InfoRow label="Created"       value={asset.created_at ? new Date(asset.created_at).toLocaleString() : null} />
+          {asset.is_migrated && (
+            <>
+              <InfoRow label="Migrated By"      value={asset.migrated_by} />
+              <InfoRow label="Migrated At"      value={asset.migrated_at ? new Date(asset.migrated_at).toLocaleString() : null} />
+              <InfoRow label="Migration Note"   value={asset.migration_comment} />
+            </>
+          )}
+        </Section>
+
+        {/* Additional Remarks — full width */}
+        {(editing || asset.additional_remarks) && (
+          <div className="card md:col-span-2">
+            <h3 className="font-semibold text-gray-800 dark:text-slate-100 mb-3 text-sm">Additional Remarks</h3>
+            {editing
+              ? <textarea
+                  className="input-field w-full text-sm resize-none"
+                  rows={4}
+                  value={form['additional_remarks'] ?? ''}
+                  onChange={e => setField('additional_remarks', e.target.value)}
+                />
+              : <p className="text-sm text-gray-700 dark:text-slate-300 whitespace-pre-wrap">{asset.additional_remarks}</p>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

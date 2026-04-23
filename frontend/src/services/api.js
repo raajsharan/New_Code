@@ -284,14 +284,23 @@ export const importAuditAPI = {
 
 export const beijingAssetsAPI = {
   getAll:    (params) => api.get('/beijing-assets', { params }),
+  getById:   (id)     => api.get(`/beijing-assets/${id}`),
+  update:    (id, d)  => api.put(`/beijing-assets/${id}`, d),
   exportCSV: (params) => api.get('/beijing-assets/export/csv', { params, responseType: 'blob' }),
   remove:    (id)     => api.delete(`/beijing-assets/${id}`),
   migrate:   (ids, migration_comment) => api.post('/beijing-assets/migrate', { ids, migration_comment }),
+  downloadTemplate: () => api.get('/beijing-assets/template', { responseType: 'blob' }),
   importFile: (file) => {
     const fd = new FormData();
     fd.append('file', file);
     return api.post('/beijing-assets/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
+  previewFile: (file) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post('/beijing-assets/preview', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+  importSelected: (rows) => api.post('/beijing-assets/import-selected', { rows }),
 };
 
 export const tenableAPI = {
