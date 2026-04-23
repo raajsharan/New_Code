@@ -591,6 +591,80 @@
 .dark .bg-gray-100         { background-color: rgb(30 41 59) !important; }
 .dark .bg-white\/35        { background-color: rgba(15,23,42,0.4) !important; }
 
+/* Slate backgrounds */
+.dark .bg-slate-50         { background-color: rgb(15 23 42) !important; }
+.dark .bg-slate-100        { background-color: rgb(30 41 59) !important; }
+.dark .border-slate-100    { border-color: rgba(255,255,255,0.05) !important; }
+.dark .border-slate-200    { border-color: rgba(255,255,255,0.08) !important; }
+.dark .border-slate-300    { border-color: rgba(255,255,255,0.10) !important; }
+
+/* Light pastel *-50 backgrounds → dark tinted equivalents */
+.dark .bg-blue-50          { background-color: rgba(59,130,246,0.13) !important; }
+.dark .bg-indigo-50        { background-color: rgba(99,102,241,0.13) !important; }
+.dark .bg-emerald-50       { background-color: rgba(16,185,129,0.13) !important; }
+.dark .bg-green-50         { background-color: rgba(34,197,94,0.13) !important; }
+.dark .bg-teal-50          { background-color: rgba(20,184,166,0.13) !important; }
+.dark .bg-cyan-50          { background-color: rgba(6,182,212,0.13) !important; }
+.dark .bg-amber-50         { background-color: rgba(245,158,11,0.13) !important; }
+.dark .bg-red-50           { background-color: rgba(239,68,68,0.13) !important; }
+.dark .bg-orange-50        { background-color: rgba(249,115,22,0.13) !important; }
+.dark .bg-purple-50        { background-color: rgba(168,85,247,0.13) !important; }
+.dark .bg-pink-50          { background-color: rgba(236,72,153,0.13) !important; }
+
+/* Light pastel *-100 backgrounds (badge/mini-stat boxes) → dark tinted */
+.dark .bg-blue-100         { background-color: rgba(59,130,246,0.18) !important; }
+.dark .bg-indigo-100       { background-color: rgba(99,102,241,0.18) !important; }
+.dark .bg-green-100        { background-color: rgba(34,197,94,0.18) !important; }
+.dark .bg-emerald-100      { background-color: rgba(16,185,129,0.18) !important; }
+.dark .bg-teal-100         { background-color: rgba(20,184,166,0.18) !important; }
+.dark .bg-cyan-100         { background-color: rgba(6,182,212,0.18) !important; }
+.dark .bg-amber-100        { background-color: rgba(245,158,11,0.18) !important; }
+.dark .bg-red-100          { background-color: rgba(239,68,68,0.18) !important; }
+.dark .bg-orange-100       { background-color: rgba(249,115,22,0.18) !important; }
+.dark .bg-purple-100       { background-color: rgba(168,85,247,0.18) !important; }
+.dark .bg-rose-100         { background-color: rgba(244,63,94,0.18) !important; }
+.dark .bg-yellow-100       { background-color: rgba(234,179,8,0.18) !important; }
+.dark .bg-lime-100         { background-color: rgba(132,204,22,0.18) !important; }
+.dark .bg-zinc-100         { background-color: rgba(113,113,122,0.18) !important; }
+.dark .bg-sky-100          { background-color: rgba(14,165,233,0.18) !important; }
+
+/* Light border-*-100/200 → tinted subtle borders */
+.dark .border-blue-100     { border-color: rgba(59,130,246,0.22) !important; }
+.dark .border-blue-200     { border-color: rgba(59,130,246,0.28) !important; }
+.dark .border-indigo-100   { border-color: rgba(99,102,241,0.22) !important; }
+.dark .border-emerald-100  { border-color: rgba(16,185,129,0.22) !important; }
+.dark .border-green-100    { border-color: rgba(34,197,94,0.22) !important; }
+.dark .border-teal-100     { border-color: rgba(20,184,166,0.22) !important; }
+.dark .border-amber-100    { border-color: rgba(245,158,11,0.22) !important; }
+.dark .border-red-100      { border-color: rgba(239,68,68,0.22) !important; }
+.dark .border-red-200      { border-color: rgba(239,68,68,0.30) !important; }
+
+/* Dark-on-light coloured text → light equivalent for dark bg */
+.dark .text-blue-800       { color: rgb(147 197 253) !important; }
+.dark .text-indigo-800     { color: rgb(165 180 252) !important; }
+.dark .text-emerald-800    { color: rgb(110 231 183) !important; }
+.dark .text-teal-800       { color: rgb(94 234 212) !important; }
+.dark .text-green-800      { color: rgb(134 239 172) !important; }
+.dark .text-amber-800      { color: rgb(252 211 77) !important; }
+.dark .text-red-800        { color: rgb(252 165 165) !important; }
+.dark .text-orange-800     { color: rgb(253 186 116) !important; }
+.dark .text-cyan-800       { color: rgb(103 232 249) !important; }
+.dark .text-blue-700       { color: rgb(147 197 253) !important; }
+.dark .text-green-700      { color: rgb(134 239 172) !important; }
+.dark .text-red-700        { color: rgb(252 165 165) !important; }
+.dark .text-amber-700      { color: rgb(252 211 77) !important; }
+.dark .text-teal-700       { color: rgb(94 234 212) !important; }
+.dark .text-cyan-700       { color: rgb(103 232 249) !important; }
+.dark .text-purple-700     { color: rgb(196 181 253) !important; }
+.dark .text-orange-700     { color: rgb(253 186 116) !important; }
+.dark .text-indigo-700     { color: rgb(165 180 252) !important; }
+.dark .text-emerald-700    { color: rgb(110 231 183) !important; }
+.dark .text-slate-800      { color: rgb(226 232 240) !important; }
+.dark .text-slate-700      { color: rgb(203 213 225) !important; }
+.dark .text-slate-500      { color: rgb(100 116 139) !important; }
+.dark .text-slate-400      { color: rgb(71 85 105) !important; }
+
+/* Gray text */
 .dark .text-gray-900       { color: rgb(241 245 249) !important; }
 .dark .text-gray-800       { color: rgb(226 232 240) !important; }
 .dark .text-gray-700       { color: rgb(203 213 225) !important; }
@@ -598,10 +672,23 @@
 .dark .text-gray-500       { color: rgb(100 116 139) !important; }
 .dark .text-gray-400       { color: rgb(71 85 105) !important; }
 
+/* Borders */
 .dark .border-gray-200     { border-color: rgba(255,255,255,0.08) !important; }
 .dark .border-gray-100     { border-color: rgba(255,255,255,0.05) !important; }
 .dark .divide-gray-100 > * + * { border-color: rgba(255,255,255,0.05) !important; }
 .dark .divide-y             > * + * { border-color: rgba(255,255,255,0.05) !important; }
+
+/* Dashboard header gradient → replace light gradient stops with dark ones */
+.dark .from-slate-50 {
+  --tw-gradient-from: rgb(15 23 42) var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: rgba(15,23,42,0) var(--tw-gradient-to-position) !important;
+}
+.dark .via-white {
+  --tw-gradient-via: rgb(20 30 50) var(--tw-gradient-via-position) !important;
+}
+.dark .to-blue-50 {
+  --tw-gradient-to: rgb(25 38 58) var(--tw-gradient-to-position) !important;
+}
 
 .dark select, .dark textarea, .dark input[type="text"],
 .dark input[type="password"], .dark input[type="email"],
