@@ -8,11 +8,12 @@ const { auth, requireWrite, requireAdmin } = require('../middleware/auth');
 const { writeAuditLog } = require('../services/audit');
 const { writeImportAuditReport } = require('../services/importAudit');
 let encryptPassword;
+let decryptPassword;
 try {
-  ({ encryptPassword } = require('../utils/encryption'));
+  ({ encryptPassword, decryptPassword } = require('../utils/encryption'));
 } catch (error) {
   if (error.code !== 'MODULE_NOT_FOUND') throw error;
-  ({ encryptPassword } = require('../encryption'));
+  ({ encryptPassword, decryptPassword } = require('../encryption'));
 }
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -420,18 +421,27 @@ router.get('/export/csv', auth, async (req,res) => {
     const r = await extPool.query('SELECT * FROM items ORDER BY created_at DESC');
     const enriched = await enrichRows(r.rows);
     const esc = v => { if(!v&&v!==0)return''; const s=String(v).replace(/"/g,'""'); return s.includes(',')||s.includes('"')?`"${s}"`:s; };
+    const canShowPw = !!req.user?.can_view_passwords;
     const headers = ['ID','VM Name','Asset Name','Hostname','IP','Asset Type','OS Type','OS Version',
       'User','Dept','Location','Status','Patch Type','Schedule','EOL','ME','Tenable',
       'Serial','iDRAC','iDRAC IP','Hosted IP','Asset Tag','Submitted By','Transferred','Created'];
-    const rows = enriched.map(a=>[
-      a.id,a.vm_name,a.asset_name,a.os_hostname,a.ip_address,
-      a.asset_type,a.os_type,a.os_version,a.assigned_user,a.department,a.location,
-      a.server_status,a.patching_type,a.patching_schedule,a.eol_status,
-      a.me_installed_status?'Yes':'No',a.tenable_installed_status?'Yes':'No',
-      a.serial_number,a.idrac_enabled?'Yes':'No',a.idrac_ip,a.hosted_ip,a.asset_tag,
-      a.submitted_by,a.transferred?'Yes':'No',
-      new Date(a.created_at).toISOString().split('T')[0]
-    ].map(esc).join(','));
+    if (canShowPw) headers.push('Username', 'Password');
+    const rows = enriched.map(a => {
+      const cols = [
+        a.id,a.vm_name,a.asset_name,a.os_hostname,a.ip_address,
+        a.asset_type,a.os_type,a.os_version,a.assigned_user,a.department,a.location,
+        a.server_status,a.patching_type,a.patching_schedule,a.eol_status,
+        a.me_installed_status?'Yes':'No',a.tenable_installed_status?'Yes':'No',
+        a.serial_number,a.idrac_enabled?'Yes':'No',a.idrac_ip,a.hosted_ip,a.asset_tag,
+        a.submitted_by,a.transferred?'Yes':'No',
+        new Date(a.created_at).toISOString().split('T')[0],
+      ];
+      if (canShowPw) {
+        cols.push(a.asset_username || '');
+        cols.push(a.asset_password ? (decryptPassword(a.asset_password) || '') : '');
+      }
+      return cols.map(esc).join(',');
+    });
     res.setHeader('Content-Type','text/csv');
     res.setHeader('Content-Disposition',`attachment; filename="extended-inventory-${new Date().toISOString().split('T')[0]}.csv"`);
     res.send([headers.join(','),...rows].join('\n'));

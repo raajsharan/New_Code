@@ -706,18 +706,27 @@ router.get('/export/csv', auth, async (req, res) => {
     const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
     const r = await pool.query(`${ASSET_SELECT} ${where} ORDER BY a.created_at DESC`, params);
 
+    const canShowPw = !!req.user?.can_view_passwords;
     const esc = v => { if (!v && v !== 0) return ''; const s = String(v).replace(/"/g,'""'); return s.includes(',') || s.includes('"') ? `"${s}"` : s; };
     const headers = ['ID','VM Name','Hostname','IP','Asset Type','OS','Version','User','Dept',
       'Status','Patch Type','Sched','Location','Serial','iDRAC','iDRAC IP','EOL',
       'ME','Tenable','Hosted IP','Asset Tag','Submitted By','Created'];
-    const rows = r.rows.map(a => [
-      a.id,a.vm_name,a.os_hostname,a.ip_address,a.asset_type,a.os_type,a.os_version,
-      a.assigned_user,a.department,a.server_status,a.patching_type,a.patching_schedule,
-      a.location,a.serial_number,a.idrac_enabled?'Yes':'No',a.idrac_ip,a.eol_status,
-      a.me_installed_status?'Yes':'No',a.tenable_installed_status?'Yes':'No',
-      a.hosted_ip,a.asset_tag,a.submitted_by,
-      new Date(a.created_at).toISOString().split('T')[0]
-    ].map(esc).join(','));
+    if (canShowPw) headers.push('Username', 'Password');
+    const rows = r.rows.map(a => {
+      const cols = [
+        a.id,a.vm_name,a.os_hostname,a.ip_address,a.asset_type,a.os_type,a.os_version,
+        a.assigned_user,a.department,a.server_status,a.patching_type,a.patching_schedule,
+        a.location,a.serial_number,a.idrac_enabled?'Yes':'No',a.idrac_ip,a.eol_status,
+        a.me_installed_status?'Yes':'No',a.tenable_installed_status?'Yes':'No',
+        a.hosted_ip,a.asset_tag,a.submitted_by,
+        new Date(a.created_at).toISOString().split('T')[0],
+      ];
+      if (canShowPw) {
+        cols.push(a.asset_username || '');
+        cols.push(a.asset_password ? (decryptPassword(a.asset_password) || '') : '');
+      }
+      return cols.map(esc).join(',');
+    });
 
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="inventory-${new Date().toISOString().split('T')[0]}.csv"`);
