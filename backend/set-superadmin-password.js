@@ -10,6 +10,12 @@ require('dotenv').config();
 
 const password = process.argv[2] || 'SuperAdmin@2024';
 
+if (!process.env.DB_PASSWORD) {
+  console.error('Error: DB_PASSWORD is not set. Create a .env file or run:');
+  console.error('  DB_PASSWORD=<your_db_password> node set-superadmin-password.js <new_password>');
+  process.exit(1);
+}
+
 const pool = new Pool({
   host:     process.env.DB_HOST     || 'localhost',
   port:     parseInt(process.env.DB_PORT) || 5432,
