@@ -35,6 +35,7 @@ const NAV = [
   { to: '/configuration',      icon: Settings,        label: 'Inventory Config',    key: 'configuration' },
   { to: '/report-builder',     icon: BarChart2,       label: 'Report Builder',      key: 'report-builder' },
   { to: '/tenable-report',     icon: ShieldCheck,     label: 'Tenable Report',      key: 'tenable-report' },
+  { to: '/beijing-asset-list', icon: Globe,           label: 'Beijing Asset List',   key: 'beijing-asset-list' },
 ];
 
 const ADMIN_NAV = [
