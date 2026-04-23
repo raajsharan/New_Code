@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { extendedInventoryAPI, dropdownsAPI, transferAPI } from '../services/api';
+import { extendedInventoryAPI, dropdownsAPI, transferAPI, beijingAssetsAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import {
   ArrowRight, CheckCircle, Clock, AlertCircle,
-  Search, RefreshCw, ChevronDown, ChevronUp, Info
+  Search, RefreshCw, ChevronDown, ChevronUp, Info,
+  ArrowRightCircle, CheckSquare, Square, ChevronLeft, ChevronRight,
+  AlertTriangle
 } from 'lucide-react';
 
 const StatusBadge = ({ s }) => {
@@ -12,11 +14,8 @@ const StatusBadge = ({ s }) => {
   return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{s||'—'}</span>;
 };
 
-// Mapping form for a single item
+// ── Transfer Modal (Extended Inventory) ───────────────────────────────────────
 function TransferModal({ item, dropdowns, onTransfer, onClose }) {
-  const transferDateStamp = new Date().toLocaleDateString('en-GB', {
-    day: '2-digit', month: 'short', year: 'numeric'
-  });
   const [form, setForm] = useState({
     map_asset_type_id: '',
     map_os_type_id: '',
@@ -65,7 +64,6 @@ function TransferModal({ item, dropdowns, onTransfer, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <div>
             <h3 className="text-lg font-bold text-gray-800">Transfer to Main Inventory</h3>
@@ -74,7 +72,6 @@ function TransferModal({ item, dropdowns, onTransfer, onClose }) {
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl font-light">✕</button>
         </div>
 
-        {/* Source info */}
         <div className="mx-6 mt-4 p-3 bg-blue-50 rounded-xl border border-blue-200">
           <p className="text-xs font-semibold text-blue-700 mb-1.5">Source: Extended Inventory</p>
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-blue-800">
@@ -87,7 +84,6 @@ function TransferModal({ item, dropdowns, onTransfer, onClose }) {
           </div>
         </div>
 
-        {/* Mapping fields */}
         <div className="px-6 py-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider col-span-full">
             Map to Main Inventory Fields
@@ -175,7 +171,6 @@ function TransferModal({ item, dropdowns, onTransfer, onClose }) {
           </div>
         </div>
 
-        {/* Warning */}
         <div className="mx-6 mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl flex gap-2">
           <AlertCircle size={15} className="text-amber-600 flex-shrink-0 mt-0.5" />
           <p className="text-xs text-amber-700">
@@ -184,13 +179,8 @@ function TransferModal({ item, dropdowns, onTransfer, onClose }) {
           </p>
         </div>
 
-        {/* Actions */}
         <div className="px-6 pb-6 flex gap-3">
-          <button
-            onClick={handleTransfer}
-            disabled={saving}
-            className="btn-primary flex-1 justify-center py-2.5"
-          >
+          <button onClick={handleTransfer} disabled={saving} className="btn-primary flex-1 justify-center py-2.5">
             <ArrowRight size={16} />
             {saving ? 'Transferring…' : 'Confirm Transfer'}
           </button>
@@ -201,15 +191,236 @@ function TransferModal({ item, dropdowns, onTransfer, onClose }) {
   );
 }
 
+// ── Beijing Migrate Modal ─────────────────────────────────────────────────────
+function BeijingMigrateModal({ selected, onConfirm, onClose, loading }) {
+  const [comment, setComment] = useState('');
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+            <ArrowRightCircle size={20} className="text-blue-600" />
+          </div>
+          <div>
+            <p className="font-semibold text-gray-900">Migrate to Asset List</p>
+            <p className="text-sm text-gray-500">{selected.length} asset{selected.length !== 1 ? 's' : ''} selected</p>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            Migration Comment <span className="text-gray-400 font-normal">(optional)</span>
+          </label>
+          <textarea
+            rows={3}
+            value={comment}
+            onChange={e => setComment(e.target.value)}
+            placeholder="e.g. Verified by network team, approved for production inventory..."
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          />
+          <p className="text-xs text-gray-400 mt-1">
+            This comment, along with the timestamp and your username, will be recorded on the migrated asset.
+          </p>
+        </div>
+
+        <div className="flex gap-3 pt-1">
+          <button onClick={onClose} disabled={loading}
+            className="flex-1 px-4 py-2.5 rounded-xl border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+            Cancel
+          </button>
+          <button onClick={() => onConfirm(comment)} disabled={loading}
+            className="flex-1 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2">
+            {loading ? <RefreshCw size={14} className="animate-spin" /> : <ArrowRightCircle size={14} />}
+            Migrate
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Beijing Assets Tab ────────────────────────────────────────────────────────
+function BeijingAssetsTab() {
+  const [assets,   setAssets]   = useState([]);
+  const [total,    setTotal]    = useState(0);
+  const [page,     setPage]     = useState(1);
+  const [loading,  setLoading]  = useState(false);
+  const [search,   setSearch]   = useState('');
+  const [selected, setSelected] = useState(new Set());
+  const [migrateOpen,    setMigrateOpen]    = useState(false);
+  const [migrateLoading, setMigrateLoading] = useState(false);
+
+  const LIMIT = 15;
+
+  const fetchAssets = useCallback(async (pg = page) => {
+    setLoading(true);
+    try {
+      const res = await beijingAssetsAPI.getAll({ page: pg, limit: LIMIT, search, status: 'pending' });
+      setAssets(res.data.assets);
+      setTotal(res.data.total);
+      setSelected(new Set());
+    } catch {
+      toast.error('Failed to load Beijing assets');
+    } finally {
+      setLoading(false);
+    }
+  }, [page, search]);
+
+  useEffect(() => { fetchAssets(1); setPage(1); }, [search]); // eslint-disable-line
+  useEffect(() => { fetchAssets(page); }, [page]);              // eslint-disable-line
+
+  const allSelected = assets.length > 0 && assets.every(a => selected.has(a.id));
+
+  function toggleSelectAll() {
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(assets.map(a => a.id)));
+  }
+
+  function toggleOne(id) {
+    setSelected(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+  }
+
+  async function handleMigrate(comment) {
+    setMigrateLoading(true);
+    try {
+      const res = await beijingAssetsAPI.migrate([...selected], comment);
+      const { migrated, failed } = res.data;
+      if (migrated.length) toast.success(`${migrated.length} asset(s) migrated to Asset List`);
+      if (failed.length)   toast.error(`${failed.length} asset(s) failed — check console`);
+      setMigrateOpen(false);
+      fetchAssets(page);
+    } catch (e) {
+      toast.error(e.response?.data?.error || 'Migration failed');
+    } finally {
+      setMigrateLoading(false);
+    }
+  }
+
+  const pages = Math.ceil(total / LIMIT) || 1;
+
+  return (
+    <div className="space-y-4">
+      {/* Toolbar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="relative max-w-sm flex-1">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search IP, name, hostname, dept…"
+            className="w-full pl-8 pr-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          {selected.size > 0 && (
+            <button onClick={() => setMigrateOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">
+              <ArrowRightCircle size={15} />
+              Migrate Selected ({selected.size})
+            </button>
+          )}
+          <button onClick={() => fetchAssets(page)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-300 text-gray-700 text-sm hover:bg-gray-50">
+            <RefreshCw size={15} /> Refresh
+          </button>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+          <p className="text-sm font-semibold text-gray-700">
+            Pending Migration
+            <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{total}</span>
+          </p>
+          {selected.size > 0 && (
+            <p className="text-xs text-blue-600 font-medium">{selected.size} selected</p>
+          )}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-200">
+                <th className="px-3 py-3 w-10">
+                  <button onClick={toggleSelectAll} className="text-gray-400 hover:text-blue-600">
+                    {allSelected ? <CheckSquare size={16} className="text-blue-600" /> : <Square size={16} />}
+                  </button>
+                </th>
+                <th className="px-3 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">IP Address</th>
+                <th className="px-3 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">VM Name</th>
+                <th className="px-3 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">Hostname</th>
+                <th className="px-3 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">Asset Type</th>
+                <th className="px-3 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">OS</th>
+                <th className="px-3 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">Department</th>
+                <th className="px-3 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">Location</th>
+                <th className="px-3 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">Import Source</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {loading ? (
+                <tr><td colSpan={9} className="py-16 text-center text-gray-400">
+                  <RefreshCw size={20} className="animate-spin mx-auto mb-2" />Loading…
+                </td></tr>
+              ) : assets.length === 0 ? (
+                <tr><td colSpan={9} className="py-16 text-center text-gray-400">
+                  <CheckCircle size={28} className="mx-auto mb-2 text-green-400" />
+                  <p className="font-medium">{search ? 'No items match your search' : 'No pending Beijing assets to migrate'}</p>
+                </td></tr>
+              ) : assets.map(a => (
+                <tr key={a.id}
+                  className={`hover:bg-gray-50 transition-colors ${selected.has(a.id) ? 'bg-blue-50' : ''}`}>
+                  <td className="px-3 py-2.5">
+                    <button onClick={() => toggleOne(a.id)} className="text-gray-400 hover:text-blue-600">
+                      {selected.has(a.id) ? <CheckSquare size={15} className="text-blue-600" /> : <Square size={15} />}
+                    </button>
+                  </td>
+                  <td className="px-3 py-2.5 font-mono text-xs text-gray-800 whitespace-nowrap">{a.ip_address}</td>
+                  <td className="px-3 py-2.5 text-gray-700 max-w-[140px] truncate">{a.vm_name || '—'}</td>
+                  <td className="px-3 py-2.5 text-gray-600 max-w-[140px] truncate">{a.os_hostname || '—'}</td>
+                  <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{a.asset_type || '—'}</td>
+                  <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{[a.os_type, a.os_version].filter(Boolean).join(' ') || '—'}</td>
+                  <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{a.department || '—'}</td>
+                  <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{a.location || '—'}</td>
+                  <td className="px-3 py-2.5 text-gray-500 text-xs max-w-[140px] truncate" title={a.import_source}>{a.import_source || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="px-4 py-3 border-t border-gray-100 flex justify-end">
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            <span>{total} record{total !== 1 ? 's' : ''}</span>
+            <button onClick={() => setPage(p => p - 1)} disabled={page <= 1}
+              className="p-1 rounded hover:bg-gray-100 disabled:opacity-30"><ChevronLeft size={16} /></button>
+            <span className="font-medium">{page} / {pages}</span>
+            <button onClick={() => setPage(p => p + 1)} disabled={page >= pages}
+              className="p-1 rounded hover:bg-gray-100 disabled:opacity-30"><ChevronRight size={16} /></button>
+          </div>
+        </div>
+      </div>
+
+      {migrateOpen && (
+        <BeijingMigrateModal
+          selected={[...selected]}
+          loading={migrateLoading}
+          onConfirm={handleMigrate}
+          onClose={() => setMigrateOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function TransferToInventoryPage() {
   const { isAdmin } = useAuth();
-  const [items, setItems]       = useState([]);
-  const [log, setLog]           = useState([]);
-  const [dropdowns, setDropdowns] = useState({});
-  const [loading, setLoading]   = useState(true);
-  const [search, setSearch]     = useState('');
-  const [showLog, setShowLog]   = useState(false);
+  const [activeTab, setActiveTab] = useState('extended');
+
+  const [items, setItems]           = useState([]);
+  const [log, setLog]               = useState([]);
+  const [dropdowns, setDropdowns]   = useState({});
+  const [loading, setLoading]       = useState(true);
+  const [search, setSearch]         = useState('');
+  const [showLog, setShowLog]       = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
 
   const fetchAll = useCallback(async () => {
@@ -265,7 +476,7 @@ export default function TransferToInventoryPage() {
             Transfer to Asset Inventory
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Move approved items from Extended Inventory into the main Asset Inventory
+            Move approved items from Extended Inventory or Beijing Asset List into the main Asset Inventory
           </p>
         </div>
         <button onClick={() => { fetchAll(); fetchLog(); }} className="btn-secondary text-xs">
@@ -273,133 +484,158 @@ export default function TransferToInventoryPage() {
         </button>
       </div>
 
-      {/* Info banner */}
-      <div className="card mb-5 border-blue-200 bg-blue-50 flex items-start gap-3">
-        <Info size={18} className="text-blue-600 flex-shrink-0 mt-0.5" />
-        <div className="text-sm text-blue-800">
-          <p className="font-semibold mb-1">How it works</p>
-          <ul className="list-disc list-inside space-y-0.5 text-xs text-blue-700">
-            <li>Select an Extended Inventory item and click <strong>Transfer</strong></li>
-            <li>Map it to the correct asset fields (OS type, patching, status, etc.)</li>
-            <li>On confirmation, a new record is created in the main Asset Inventory</li>
-            <li>The source item is marked <strong>Transferred</strong> and locked from re-transfer</li>
-            <li>A full audit log is kept below</li>
-          </ul>
-        </div>
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-gray-200 mb-5">
+        {[
+          { key: 'extended', label: 'Extended Inventory' },
+          { key: 'beijing',  label: 'Beijing Assets' },
+        ].map(t => (
+          <button key={t.key} onClick={() => setActiveTab(t.key)}
+            className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === t.key
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-800'
+            }`}>
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      {/* Search */}
-      <div className="card mb-4">
-        <div className="relative max-w-sm">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input className="input-field pl-8" placeholder="Search by name, IP, type, user…"
-            value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
-      </div>
-
-      {/* Items table */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between bg-gray-50">
-          <p className="text-sm font-semibold text-gray-700">
-            Pending Transfer
-            <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{filtered.length}</span>
-          </p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                {['Asset Name','IP Address','MAC','Type','Department','Assigned User','Location','Status','Description','Action'].map(h => (
-                  <th key={h} className="table-th">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {loading ? Array(4).fill(0).map((_,i) => (
-                <tr key={i} className="animate-pulse">
-                  {Array(10).fill(0).map((_,j) => <td key={j} className="table-td"><div className="h-4 bg-gray-100 rounded"/></td>)}
-                </tr>
-              )) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={10} className="text-center py-16 text-gray-400">
-                    <CheckCircle size={32} className="mx-auto mb-2 text-green-400" />
-                    <p className="font-medium">{items.length === 0 ? 'No extended inventory items to transfer' : 'No items match your search'}</p>
-                  </td>
-                </tr>
-              ) : filtered.map(item => (
-                <tr key={item.id} className="hover:bg-blue-50/30 transition-colors">
-                  <td className="table-td font-medium text-blue-800">{item.asset_name || '—'}</td>
-                  <td className="table-td font-mono text-xs">{item.ip_address || '—'}</td>
-                  <td className="table-td font-mono text-xs">{item.mac_address || '—'}</td>
-                  <td className="table-td text-xs">{item.asset_type || '—'}</td>
-                  <td className="table-td text-xs">{item.department || '—'}</td>
-                  <td className="table-td text-xs">{item.assigned_user || '—'}</td>
-                  <td className="table-td text-xs">{item.location || '—'}</td>
-                  <td className="table-td"><StatusBadge s={item.status} /></td>
-                  <td className="table-td text-xs max-w-[160px] truncate" title={item.description}>{item.description || '—'}</td>
-                  <td className="table-td">
-                    <button
-                      onClick={() => setSelectedItem(item)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-700 text-white rounded-lg text-xs font-medium hover:bg-blue-800 transition-colors"
-                    >
-                      <ArrowRight size={12} /> Transfer
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Transfer log */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <button
-          onClick={() => setShowLog(!showLog)}
-          className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
-        >
-          <div className="flex items-center gap-2">
-            <Clock size={15} className="text-gray-500" />
-            <span className="text-sm font-semibold text-gray-700">Transfer Audit Log</span>
-            <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">{log.length}</span>
+      {/* ── Extended Inventory Tab ─────────────────────────────────────────── */}
+      {activeTab === 'extended' && (
+        <>
+          {/* Info banner */}
+          <div className="card mb-5 border-blue-200 bg-blue-50 flex items-start gap-3">
+            <Info size={18} className="text-blue-600 flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-blue-800">
+              <p className="font-semibold mb-1">How it works</p>
+              <ul className="list-disc list-inside space-y-0.5 text-xs text-blue-700">
+                <li>Select an Extended Inventory item and click <strong>Transfer</strong></li>
+                <li>Map it to the correct asset fields (OS type, patching, status, etc.)</li>
+                <li>On confirmation, a new record is created in the main Asset Inventory</li>
+                <li>The source item is marked <strong>Transferred</strong> and locked from re-transfer</li>
+                <li>A full audit log is kept below</li>
+              </ul>
+            </div>
           </div>
-          {showLog ? <ChevronUp size={15} className="text-gray-400" /> : <ChevronDown size={15} className="text-gray-400" />}
-        </button>
 
-        {showLog && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  {['Asset Name','IP Address','Main Asset ID','Transferred By','Notes','Date'].map(h => (
-                    <th key={h} className="table-th">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {log.length === 0 ? (
-                  <tr><td colSpan={6} className="table-td text-center text-gray-400 py-6">No transfers yet</td></tr>
-                ) : log.map(entry => (
-                  <tr key={entry.id} className="hover:bg-gray-50">
-                    <td className="table-td font-medium">{entry.ext_asset_name}</td>
-                    <td className="table-td font-mono text-xs">{entry.ext_ip_address}</td>
-                    <td className="table-td text-xs">
-                      {entry.main_asset_id
-                        ? <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-medium">#{entry.main_asset_id}</span>
-                        : '—'}
-                    </td>
-                    <td className="table-td text-xs">{entry.transferred_by}</td>
-                    <td className="table-td text-xs max-w-[200px] truncate" title={entry.transfer_notes}>{entry.transfer_notes || '—'}</td>
-                    <td className="table-td text-xs text-gray-400">
-                      {new Date(entry.transferred_at).toLocaleString()}
-                    </td>
+          {/* Search */}
+          <div className="card mb-4">
+            <div className="relative max-w-sm">
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input className="input-field pl-8" placeholder="Search by name, IP, type, user…"
+                value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
+          </div>
+
+          {/* Items table */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-6">
+            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between bg-gray-50">
+              <p className="text-sm font-semibold text-gray-700">
+                Pending Transfer
+                <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{filtered.length}</span>
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    {['Asset Name','IP Address','MAC','Type','Department','Assigned User','Location','Status','Description','Action'].map(h => (
+                      <th key={h} className="table-th">{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {loading ? Array(4).fill(0).map((_,i) => (
+                    <tr key={i} className="animate-pulse">
+                      {Array(10).fill(0).map((_,j) => <td key={j} className="table-td"><div className="h-4 bg-gray-100 rounded"/></td>)}
+                    </tr>
+                  )) : filtered.length === 0 ? (
+                    <tr>
+                      <td colSpan={10} className="text-center py-16 text-gray-400">
+                        <CheckCircle size={32} className="mx-auto mb-2 text-green-400" />
+                        <p className="font-medium">{items.length === 0 ? 'No extended inventory items to transfer' : 'No items match your search'}</p>
+                      </td>
+                    </tr>
+                  ) : filtered.map(item => (
+                    <tr key={item.id} className="hover:bg-blue-50/30 transition-colors">
+                      <td className="table-td font-medium text-blue-800">{item.asset_name || '—'}</td>
+                      <td className="table-td font-mono text-xs">{item.ip_address || '—'}</td>
+                      <td className="table-td font-mono text-xs">{item.mac_address || '—'}</td>
+                      <td className="table-td text-xs">{item.asset_type || '—'}</td>
+                      <td className="table-td text-xs">{item.department || '—'}</td>
+                      <td className="table-td text-xs">{item.assigned_user || '—'}</td>
+                      <td className="table-td text-xs">{item.location || '—'}</td>
+                      <td className="table-td"><StatusBadge s={item.status} /></td>
+                      <td className="table-td text-xs max-w-[160px] truncate" title={item.description}>{item.description || '—'}</td>
+                      <td className="table-td">
+                        <button
+                          onClick={() => setSelectedItem(item)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-700 text-white rounded-lg text-xs font-medium hover:bg-blue-800 transition-colors"
+                        >
+                          <ArrowRight size={12} /> Transfer
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        )}
-      </div>
+
+          {/* Transfer log */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <button
+              onClick={() => setShowLog(!showLog)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Clock size={15} className="text-gray-500" />
+                <span className="text-sm font-semibold text-gray-700">Transfer Audit Log</span>
+                <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">{log.length}</span>
+              </div>
+              {showLog ? <ChevronUp size={15} className="text-gray-400" /> : <ChevronDown size={15} className="text-gray-400" />}
+            </button>
+
+            {showLog && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      {['Asset Name','IP Address','Main Asset ID','Transferred By','Notes','Date'].map(h => (
+                        <th key={h} className="table-th">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {log.length === 0 ? (
+                      <tr><td colSpan={6} className="table-td text-center text-gray-400 py-6">No transfers yet</td></tr>
+                    ) : log.map(entry => (
+                      <tr key={entry.id} className="hover:bg-gray-50">
+                        <td className="table-td font-medium">{entry.ext_asset_name}</td>
+                        <td className="table-td font-mono text-xs">{entry.ext_ip_address}</td>
+                        <td className="table-td text-xs">
+                          {entry.main_asset_id
+                            ? <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-medium">#{entry.main_asset_id}</span>
+                            : '—'}
+                        </td>
+                        <td className="table-td text-xs">{entry.transferred_by}</td>
+                        <td className="table-td text-xs max-w-[200px] truncate" title={entry.transfer_notes}>{entry.transfer_notes || '—'}</td>
+                        <td className="table-td text-xs text-gray-400">
+                          {new Date(entry.transferred_at).toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ── Beijing Assets Tab ─────────────────────────────────────────────── */}
+      {activeTab === 'beijing' && <BeijingAssetsTab />}
 
       {/* Transfer modal */}
       {selectedItem && (
@@ -413,4 +649,3 @@ export default function TransferToInventoryPage() {
     </div>
   );
 }
-
