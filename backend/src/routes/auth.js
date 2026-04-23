@@ -185,4 +185,3 @@ router.put('/change-password', auth, async (req, res) => {
 });
 
 module.exports = router;
-

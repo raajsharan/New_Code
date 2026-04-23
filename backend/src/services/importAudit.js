@@ -76,4 +76,3 @@ module.exports = {
   ensureImportAuditTable,
   writeImportAuditReport,
 };
-

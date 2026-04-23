@@ -1351,5 +1351,3 @@ router.post('/discover', auth, requireAdmin, async (req, res) => {
 
 module.exports = router;
 module.exports.startScheduler = startScheduler;
-
-

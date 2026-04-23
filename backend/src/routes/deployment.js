@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs/promises');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
+const { Client: SshClient } = require('ssh2');
 const pool    = require('../config/database');
 const extPool = pool.extPool;
 const { auth, requireAdmin } = require('../middleware/auth');
@@ -129,40 +130,57 @@ function sanitizeCommandErrorMessage(err, secretValues = []) {
 
 function toLinuxAuthFriendlyError(err, { host, username, password }) {
   const message = sanitizeCommandErrorMessage(err, [password]);
-  if (/Permission denied/i.test(message)) {
+  if (/Permission denied|All configured authentication methods failed|authentication.*failed/i.test(message)) {
     return new Error(`SSH authentication failed for ${username}@${host}. Verify username/password and confirm SSH password login is allowed on target host.`);
   }
   return new Error(message);
 }
 
+function openSshConnection({ host, port, username, password }) {
+  return new Promise((resolve, reject) => {
+    const conn = new SshClient();
+    conn.on('ready', () => resolve(conn));
+    conn.on('error', reject);
+    conn.connect({ host, port: Number(port), username, password, readyTimeout: 30000, tryKeyboard: true });
+  });
+}
+
+function sshExecOnConn(conn, command) {
+  return new Promise((resolve, reject) => {
+    conn.exec(command, (err, stream) => {
+      if (err) return reject(err);
+      let stdout = '';
+      let stderr = '';
+      stream.on('close', (code) => {
+        if (code !== 0) reject(new Error(stderr.trim() || `Remote command exited with code ${code}`));
+        else resolve({ stdout, stderr });
+      });
+      stream.on('data', (data) => { stdout += String(data); });
+      stream.stderr.on('data', (data) => { stderr += String(data); });
+    });
+  });
+}
+
+function sftpPutFile(conn, localPath, remotePath) {
+  return new Promise((resolve, reject) => {
+    conn.sftp((err, sftp) => {
+      if (err) return reject(err);
+      sftp.fastPut(localPath, remotePath, (err2) => {
+        if (err2) reject(err2); else resolve();
+      });
+    });
+  });
+}
+
 async function runLinuxRemoteCommand({ host, username, password, port, remoteCommand }) {
-  const sshExecCommon = [
-    '-o', 'StrictHostKeyChecking=no',
-    '-o', 'UserKnownHostsFile=/dev/null',
-    '-o', 'PreferredAuthentications=password',
-    '-o', 'KbdInteractiveAuthentication=yes',
-    '-o', 'PubkeyAuthentication=no',
-    '-o', 'NumberOfPasswordPrompts=1',
-    '-p', String(port),
-  ];
-  const supportsSshpass = process.platform !== 'win32' && await commandExists('sshpass') && await commandExists('ssh');
-  const supportsPlink = process.platform === 'win32' && await commandExists('plink');
-
-  if (!supportsSshpass && !supportsPlink) {
-    throw new Error('No supported Linux remote runner found. Install sshpass+ssh or plink.');
-  }
-
-  if (supportsSshpass) {
-    try {
-      return await runLocalCommand('sshpass', ['-p', password, 'ssh', ...sshExecCommon, `${username}@${host}`, remoteCommand]);
-    } catch (err) {
-      throw toLinuxAuthFriendlyError(err, { host, username, password });
-    }
-  }
-
+  let conn;
   try {
-    return await runLocalCommand('plink', ['-batch', '-ssh', '-noagent', '-P', String(port), '-pw', password, `${username}@${host}`, remoteCommand]);
+    conn = await openSshConnection({ host, port, username, password });
+    const result = await sshExecOnConn(conn, remoteCommand);
+    conn.end();
+    return result;
   } catch (err) {
+    if (conn) try { conn.end(); } catch {}
     throw toLinuxAuthFriendlyError(err, { host, username, password });
   }
 }
@@ -323,105 +341,42 @@ async function deployLinuxEndpoint(target, settings = {}) {
   const shouldInstallNessus = nessusInstallEnabled && isNonBlank(nessusCurlCommand);
   const remoteBin = shouldInstallManageEngine ? `/tmp/${path.basename(localBin)}` : '';
   const remoteCfg = shouldInstallManageEngine && localCfg ? `/tmp/${path.basename(localCfg)}` : '';
-  const sshCommon = [
-    '-o', 'StrictHostKeyChecking=no',
-    '-o', 'UserKnownHostsFile=/dev/null',
-    '-o', 'PreferredAuthentications=password',
-    '-o', 'KbdInteractiveAuthentication=yes',
-    '-o', 'PubkeyAuthentication=no',
-    '-o', 'NumberOfPasswordPrompts=1',
-    '-P', String(port),
-  ];
-  const sshExecCommon = [
-    '-o', 'StrictHostKeyChecking=no',
-    '-o', 'UserKnownHostsFile=/dev/null',
-    '-o', 'PreferredAuthentications=password',
-    '-o', 'KbdInteractiveAuthentication=yes',
-    '-o', 'PubkeyAuthentication=no',
-    '-o', 'NumberOfPasswordPrompts=1',
-    '-p', String(port),
-  ];
-  const supportsSshpass = process.platform !== 'win32'
-    && await commandExists('sshpass')
-    && await commandExists('ssh')
-    && (!shouldInstallManageEngine || await commandExists('scp'));
-  const supportsPlink = process.platform === 'win32'
-    && await commandExists('plink')
-    && (!shouldInstallManageEngine || await commandExists('pscp'));
-
-  if (!supportsSshpass && !supportsPlink) {
-    throw new Error('No supported Linux deployment runner found. Install sshpass+ssh (+scp for file copy) or plink (+pscp for file copy).');
-  }
 
   if (!shouldInstallManageEngine && !shouldInstallNessus) {
     throw new Error('No Linux install action configured. Provide ManageEngine installer path or enable Nessus curl install command.');
   }
 
-  if (supportsSshpass) {
-    try {
-      if (shouldInstallManageEngine) {
-        await runLocalCommand('sshpass', ['-p', password, 'scp', ...sshCommon, localBin, `${username}@${host}:${remoteBin}`]);
-        if (localCfg) {
-          await runLocalCommand('sshpass', ['-p', password, 'scp', ...sshCommon, localCfg, `${username}@${host}:${remoteCfg}`]);
-        }
-      }
-      const remoteSteps = [];
-      if (shouldInstallManageEngine) {
-        const installCommand = buildLinuxInstallCommand({ remoteBin, remoteCfg, password, extraArgs, customCommand });
-        if (customCommand) {
-          remoteSteps.push(`chmod +x ${shQuote(remoteBin)}`);
-        }
-        remoteSteps.push(installCommand);
-      }
-      if (shouldInstallNessus) {
-        remoteSteps.push(`bash -lc ${shQuote(nessusCurlCommand)}`);
-      }
-      if (shouldInstallManageEngine) {
-        const toClean = [remoteBin, remoteCfg].filter(Boolean).map(shQuote).join(' ');
-        remoteSteps.push(`rm -f ${toClean} || true`);
-      }
-      const remoteCommand = remoteSteps.join(' && ');
-      const result = await runLocalCommand('sshpass', ['-p', password, 'ssh', ...sshExecCommon, `${username}@${host}`, remoteCommand]);
-      return {
-        message: (result.stdout || result.stderr || 'Deployment command completed').trim(),
-        manageEngineExecuted: shouldInstallManageEngine,
-        nessusExecuted: shouldInstallNessus,
-      };
-    } catch (err) {
-      throw toLinuxAuthFriendlyError(err, { host, username, password });
-    }
+  const remoteSteps = [];
+  if (shouldInstallManageEngine) {
+    const installCommand = buildLinuxInstallCommand({ remoteBin, remoteCfg, password, extraArgs, customCommand });
+    if (customCommand) remoteSteps.push(`chmod +x ${shQuote(remoteBin)}`);
+    remoteSteps.push(installCommand);
   }
+  if (shouldInstallNessus) {
+    remoteSteps.push(`bash -lc ${shQuote(nessusCurlCommand)}`);
+  }
+  if (shouldInstallManageEngine) {
+    const toClean = [remoteBin, remoteCfg].filter(Boolean).map(shQuote).join(' ');
+    remoteSteps.push(`rm -f ${toClean} || true`);
+  }
+  const remoteCommand = remoteSteps.join(' && ');
 
+  let conn;
   try {
+    conn = await openSshConnection({ host, port, username, password });
     if (shouldInstallManageEngine) {
-      await runLocalCommand('pscp', ['-batch', '-P', String(port), '-pw', password, localBin, `${username}@${host}:${remoteBin}`]);
-      if (localCfg) {
-        await runLocalCommand('pscp', ['-batch', '-P', String(port), '-pw', password, localCfg, `${username}@${host}:${remoteCfg}`]);
-      }
+      await sftpPutFile(conn, localBin, remoteBin);
+      if (localCfg) await sftpPutFile(conn, localCfg, remoteCfg);
     }
-    const remoteSteps = [];
-    if (shouldInstallManageEngine) {
-      const installCommand = buildLinuxInstallCommand({ remoteBin, remoteCfg, password, extraArgs, customCommand });
-      if (customCommand) {
-        remoteSteps.push(`chmod +x ${shQuote(remoteBin)}`);
-      }
-      remoteSteps.push(installCommand);
-    }
-    if (shouldInstallNessus) {
-      remoteSteps.push(`bash -lc ${shQuote(nessusCurlCommand)}`);
-    }
-    if (shouldInstallManageEngine) {
-      const toClean = [remoteBin, remoteCfg].filter(Boolean).map(shQuote).join(' ');
-      remoteSteps.push(`rm -f ${toClean} || true`);
-    }
-    const remoteCommand = remoteSteps.join(' && ');
-    const result = await runLocalCommand('plink', ['-batch', '-ssh', '-noagent', '-P', String(port), '-pw', password, `${username}@${host}`, remoteCommand]);
+    const result = await sshExecOnConn(conn, remoteCommand);
+    conn.end();
     return {
       message: (result.stdout || result.stderr || 'Deployment command completed').trim(),
       manageEngineExecuted: shouldInstallManageEngine,
       nessusExecuted: shouldInstallNessus,
     };
   } catch (err) {
+    if (conn) try { conn.end(); } catch {}
     throw toLinuxAuthFriendlyError(err, { host, username, password });
   }
 }
@@ -900,4 +855,3 @@ router.get('/jobs/:id', auth, requireAdmin, async (req, res) => {
 });
 
 module.exports = router;
-

@@ -48,4 +48,3 @@ function decryptPassword(encrypted) {
 }
 
 module.exports = { encryptPassword, decryptPassword };
-

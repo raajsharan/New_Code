@@ -265,4 +265,3 @@ function defaultTemplates() {
 
 module.exports = router;
 module.exports.triggerNotification = triggerNotification;
-

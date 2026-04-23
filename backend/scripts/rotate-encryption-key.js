@@ -117,4 +117,3 @@ main()
       await pool.end();
     } catch {}
   });
-

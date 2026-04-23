@@ -36,4 +36,3 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 InfraInventory API on port ${PORT}`));
 if (typeof vmwareRoutes.startScheduler === 'function') vmwareRoutes.startScheduler();
 module.exports = app;
-

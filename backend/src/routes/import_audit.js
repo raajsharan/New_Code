@@ -53,4 +53,3 @@ router.get('/', auth, requireAdmin, async (req, res) => {
 });
 
 module.exports = router;
-

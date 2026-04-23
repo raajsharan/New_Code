@@ -217,4 +217,3 @@ router.get('/permissions/all', auth, requireAdmin, async (req, res) => {
 });
 
 module.exports = router;
-
