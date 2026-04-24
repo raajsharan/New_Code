@@ -132,7 +132,14 @@ export default function SoftwareDeploymentPage() {
       const r = await deploymentAPI.getMeAgentStatus({ search: meSearch, filterby: meFilter, page: mePage, page_size: ME_PAGE_SIZE });
       setMeAgents(r.data.computers || []);
       setMeTotal(r.data.total || 0);
-    } catch (e) { toast.error(e?.response?.data?.error || 'Failed to fetch agent status'); }
+    } catch (e) {
+      const errData = e?.response?.data;
+      const msg = errData?.error || 'Failed to fetch agent status';
+      // Show ME's own error detail if present (helps debug 400s)
+      const detail = errData?.detail;
+      const detailStr = detail ? (typeof detail === 'object' ? JSON.stringify(detail) : String(detail)) : '';
+      toast.error(detailStr ? `${msg} — ${detailStr.slice(0, 120)}` : msg, { duration: 8000 });
+    }
     finally { setMeLoading(false); }
   }, [meSearch, meFilter, mePage]);
 

@@ -985,14 +985,42 @@ router.get('/me-agent-status', auth, requireAdmin, async (req, res) => {
     });
 
     const resindex = (Number(page) - 1) * Number(page_size);
-    const apiUrl = `${baseUrl}/api/1.4/som/computers?filterby=${encodeURIComponent(filterby)}&resindex=${resindex}&count=${page_size}`;
-    const result = await fetchMe(apiUrl, cfg.api_key);
+    const apiKey   = cfg.api_key;
+
+    // Build candidate URLs — try multiple paths/param styles until one works
+    // ME EC requires authtoken as a QUERY PARAM (not just header) on most versions
+    const mkUrl = (path, extra = '') => {
+      const qs = new URLSearchParams({ authtoken: apiKey, resindex: String(resindex), count: String(page_size) });
+      if (extra) qs.set('filterby', extra);
+      return `${baseUrl}${path}?${qs.toString()}`;
+    };
+
+    // Ordered list of candidates: prefer the standard EC path, fall back to older DC path
+    const candidates = [
+      mkUrl('/api/1.4/som/computers', filterby !== 'allcomputers' ? filterby : ''),
+      mkUrl('/api/1.4/som/computers'),                        // no filterby
+      mkUrl('/api/1.4/desktop/computers', filterby !== 'allcomputers' ? filterby : ''),
+      mkUrl('/api/1.4/desktop/computers'),
+    ];
+
+    let result = null;
+    let lastUrl = '';
+    for (const url of candidates) {
+      lastUrl = url.replace(/authtoken=[^&]+/, 'authtoken=***');  // sanitise for logs
+      console.log('ME EC trying:', lastUrl);
+      result = await fetchMe(url, apiKey);
+      if (result.status === 200) break;
+      console.log(`ME EC ${result.status} from ${lastUrl}:`, JSON.stringify(result.body)?.slice(0, 300));
+      // Don't retry on auth failures — key is wrong
+      if (result.status === 401 || result.status === 403) break;
+    }
 
     if (result.status === 401 || result.status === 403) {
-      return res.status(502).json({ error: `Authentication failed (HTTP ${result.status}). Check your API key is valid and has read access.` });
+      return res.status(502).json({ error: `Authentication failed (HTTP ${result.status}). Check your API key has read access.` });
     }
     if (result.status !== 200) {
-      return res.status(502).json({ error: `ManageEngine API returned HTTP ${result.status}`, detail: result.body });
+      const detail = typeof result.body === 'object' ? result.body : String(result.body).slice(0, 500);
+      return res.status(502).json({ error: `ManageEngine API returned HTTP ${result.status}`, detail, tried_url: lastUrl });
     }
 
     const raw = result.body;
