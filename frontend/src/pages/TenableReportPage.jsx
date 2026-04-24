@@ -31,8 +31,14 @@ const TABS = [
 const PAGE_SIZE = 50;
 
 const SOURCE_BADGE = {
-  'Asset Inventory':      'bg-blue-50 text-blue-700',
-  'Ext. Asset Inventory': 'bg-purple-50 text-purple-700',
+  'Asset Inventory':      'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
+  'Ext. Asset Inventory': 'bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300',
+};
+
+const TAB_INFO = {
+  matched:        { label: 'Tenable Import', src2: 'Asset & Ext. Asset Inventory', desc: 'IPs found in both sources — fully covered assets' },
+  not_in_tenable: { label: 'Asset & Ext. Asset Inventory', src2: 'Tenable Import', desc: 'Internal assets whose IPs are missing from Tenable scan' },
+  tenable_only:   { label: 'Tenable Import', src2: 'Asset & Ext. Asset Inventory', desc: 'IPs Tenable detected that are not registered in any inventory' },
 };
 
 export default function TenableReportPage() {
@@ -197,99 +203,115 @@ export default function TenableReportPage() {
         <span className="text-xs text-gray-400">{activeRows.length.toLocaleString()} records</span>
       </div>
 
+      {/* Tab context info bar */}
+      {TAB_INFO[tab] && (
+        <div className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 dark:bg-slate-800/60 border border-gray-200 dark:border-slate-700 text-xs text-gray-500 dark:text-slate-400">
+          <span className="font-medium text-gray-700 dark:text-slate-200">Data sources:</span>
+          <span className="px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-medium">{TAB_INFO[tab].label}</span>
+          <span className="text-gray-400 dark:text-slate-500">vs</span>
+          <span className="px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 font-medium">{TAB_INFO[tab].src2}</span>
+          <span className="text-gray-400 dark:text-slate-500">·</span>
+          <span>{TAB_INFO[tab].desc}</span>
+        </div>
+      )}
+
       {/* Table */}
       {loading ? (
         <div className="text-center py-16 text-gray-400 text-sm">Loading report…</div>
       ) : activeRows.length === 0 ? (
-        <div className="text-center py-12 border-2 border-dashed border-gray-200 rounded-xl text-gray-400">
+        <div className="text-center py-12 border-2 border-dashed border-gray-200 dark:border-slate-700 rounded-xl text-gray-400 dark:text-slate-500">
           <p className="font-medium">{data ? 'No records match filters' : 'No data yet'}</p>
           <p className="text-xs mt-1">{!data ? 'Ask an admin to import a Tenable export first' : 'Try clearing the search'}</p>
         </div>
       ) : (
         <>
-          <div className="border border-gray-200 rounded-xl overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  {tab === 'matched' && <>
-                    <th className="table-th">Source</th>
-                    <th className="table-th">Asset Name</th>
-                    <th className="table-th">Matched IP</th>
-                    <th className="table-th">All IPs</th>
-                    <th className="table-th">Asset Type</th>
-                    <th className="table-th">Tenable Host</th>
-                    <th className="table-th">Tenable Name</th>
-                    <th className="table-th">MAC Address</th>
-                    <th className="table-th">Last Observed</th>
-                    <th className="table-th">OS</th>
-                  </>}
-                  {tab === 'not_in_tenable' && <>
-                    <th className="table-th">Source</th>
-                    <th className="table-th">Asset Name</th>
-                    <th className="table-th">IP Address</th>
-                    <th className="table-th">All IPs</th>
-                    <th className="table-th">Asset Type</th>
-                    <th className="table-th">Location</th>
-                    <th className="table-th">Department</th>
-                  </>}
-                  {tab === 'tenable_only' && <>
-                    <th className="table-th">IP Address</th>
-                    <th className="table-th">Host Name</th>
-                    <th className="table-th">Name</th>
-                    <th className="table-th">MAC Address</th>
-                    <th className="table-th">All IPs (raw)</th>
-                    <th className="table-th">Last Observed</th>
-                    <th className="table-th">Operating System</th>
-                  </>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {pageRows.map((r, i) => (
-                  <tr key={i} className="hover:bg-gray-50">
-                    {tab === 'matched' && <>
-                      <td className="table-td">
-                        <span className={`text-xs px-2 py-0.5 rounded font-medium ${SOURCE_BADGE[r.source] || 'bg-gray-100 text-gray-600'}`}>{r.source}</span>
-                      </td>
-                      <td className="table-td font-medium text-gray-800">{r.name || '—'}</td>
-                      <td className="table-td">
-                        <span className="font-mono text-xs text-green-700 bg-green-50 px-1.5 py-0.5 rounded">{r.matched_ip}</span>
-                      </td>
-                      <td className="table-td text-xs text-gray-400 max-w-[160px] truncate" title={r.raw_ips}>{r.raw_ips}</td>
-                      <td className="table-td text-xs text-gray-600">{r.asset_type || '—'}</td>
-                      <td className="table-td text-xs text-gray-700">{r.tenable_host_name || '—'}</td>
-                      <td className="table-td text-xs text-gray-700">{r.tenable_name || '—'}</td>
-                      <td className="table-td font-mono text-xs text-gray-500">{r.tenable_mac || '—'}</td>
-                      <td className="table-td text-xs text-gray-500" title={fmtDate(r.tenable_last_observed)}>{timeAgo(r.tenable_last_observed)}</td>
-                      <td className="table-td text-xs text-gray-600 max-w-[140px] truncate" title={r.tenable_os}>{r.tenable_os || '—'}</td>
-                    </>}
-                    {tab === 'not_in_tenable' && <>
-                      <td className="table-td">
-                        <span className={`text-xs px-2 py-0.5 rounded font-medium ${SOURCE_BADGE[r.source] || 'bg-gray-100 text-gray-600'}`}>{r.source}</span>
-                      </td>
-                      <td className="table-td font-medium text-gray-800">{r.name || '—'}</td>
-                      <td className="table-td">
-                        <span className="font-mono text-xs text-orange-700 bg-orange-50 px-1.5 py-0.5 rounded">{r.ip_address}</span>
-                      </td>
-                      <td className="table-td text-xs text-gray-400 max-w-[160px] truncate" title={r.raw_ips}>{r.raw_ips}</td>
-                      <td className="table-td text-xs text-gray-600">{r.asset_type || '—'}</td>
-                      <td className="table-td text-xs text-gray-600">{r.location || '—'}</td>
-                      <td className="table-td text-xs text-gray-600">{r.department || '—'}</td>
-                    </>}
-                    {tab === 'tenable_only' && <>
-                      <td className="table-td">
-                        <span className="font-mono text-xs text-red-700 bg-red-50 px-1.5 py-0.5 rounded">{r.ip_address}</span>
-                      </td>
-                      <td className="table-td text-xs text-gray-700">{r.host_name || '—'}</td>
-                      <td className="table-td text-xs text-gray-700">{r.name || '—'}</td>
-                      <td className="table-td font-mono text-xs text-gray-500">{r.display_mac_address || '—'}</td>
-                      <td className="table-td text-xs text-gray-400 max-w-[160px] truncate" title={r.ipv4_addresses}>{r.ipv4_addresses || '—'}</td>
-                      <td className="table-td text-xs text-gray-500" title={fmtDate(r.last_observed)}>{timeAgo(r.last_observed)}</td>
-                      <td className="table-td text-xs text-gray-600 max-w-[150px] truncate" title={r.operating_systems}>{r.operating_systems || '—'}</td>
-                    </>}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <div className="max-h-[60vh] overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 z-10 bg-gray-50 dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700">
+                    <tr>
+                      {tab === 'matched' && <>
+                        <th className="table-th whitespace-nowrap">Source</th>
+                        <th className="table-th whitespace-nowrap">Asset Name</th>
+                        <th className="table-th whitespace-nowrap">Matched IP</th>
+                        <th className="table-th whitespace-nowrap">All IPs</th>
+                        <th className="table-th whitespace-nowrap">Asset Type</th>
+                        <th className="table-th whitespace-nowrap">Tenable Host</th>
+                        <th className="table-th whitespace-nowrap">Tenable Name</th>
+                        <th className="table-th whitespace-nowrap">MAC Address</th>
+                        <th className="table-th whitespace-nowrap">Last Observed</th>
+                        <th className="table-th whitespace-nowrap">OS</th>
+                      </>}
+                      {tab === 'not_in_tenable' && <>
+                        <th className="table-th whitespace-nowrap">Source</th>
+                        <th className="table-th whitespace-nowrap">Asset Name</th>
+                        <th className="table-th whitespace-nowrap">IP Address</th>
+                        <th className="table-th whitespace-nowrap">All IPs</th>
+                        <th className="table-th whitespace-nowrap">Asset Type</th>
+                        <th className="table-th whitespace-nowrap">Location</th>
+                        <th className="table-th whitespace-nowrap">Department</th>
+                      </>}
+                      {tab === 'tenable_only' && <>
+                        <th className="table-th whitespace-nowrap">IP Address</th>
+                        <th className="table-th whitespace-nowrap">Host Name</th>
+                        <th className="table-th whitespace-nowrap">Name</th>
+                        <th className="table-th whitespace-nowrap">MAC Address</th>
+                        <th className="table-th whitespace-nowrap">All IPs (raw)</th>
+                        <th className="table-th whitespace-nowrap">Last Observed</th>
+                        <th className="table-th whitespace-nowrap">Operating System</th>
+                      </>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-slate-700/50">
+                    {pageRows.map((r, i) => (
+                      <tr key={i} className="hover:bg-gray-50 dark:hover:bg-slate-800/50">
+                        {tab === 'matched' && <>
+                          <td className="table-td">
+                            <span className={`text-xs px-2 py-0.5 rounded font-medium ${SOURCE_BADGE[r.source] || 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300'}`}>{r.source}</span>
+                          </td>
+                          <td className="table-td font-medium text-gray-800 dark:text-slate-200">{r.name || '—'}</td>
+                          <td className="table-td">
+                            <span className="font-mono text-xs text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-1.5 py-0.5 rounded">{r.matched_ip}</span>
+                          </td>
+                          <td className="table-td text-xs text-gray-500 dark:text-slate-400 max-w-[160px] truncate" title={r.raw_ips}>{r.raw_ips}</td>
+                          <td className="table-td text-xs text-gray-600 dark:text-slate-300">{r.asset_type || '—'}</td>
+                          <td className="table-td text-xs text-gray-700 dark:text-slate-300">{r.tenable_host_name || '—'}</td>
+                          <td className="table-td text-xs text-gray-700 dark:text-slate-300">{r.tenable_name || '—'}</td>
+                          <td className="table-td font-mono text-xs text-gray-500 dark:text-slate-400">{r.tenable_mac || '—'}</td>
+                          <td className="table-td text-xs text-gray-500 dark:text-slate-400" title={fmtDate(r.tenable_last_observed)}>{timeAgo(r.tenable_last_observed)}</td>
+                          <td className="table-td text-xs text-gray-600 dark:text-slate-300 max-w-[140px] truncate" title={r.tenable_os}>{r.tenable_os || '—'}</td>
+                        </>}
+                        {tab === 'not_in_tenable' && <>
+                          <td className="table-td">
+                            <span className={`text-xs px-2 py-0.5 rounded font-medium ${SOURCE_BADGE[r.source] || 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300'}`}>{r.source}</span>
+                          </td>
+                          <td className="table-td font-medium text-gray-800 dark:text-slate-200">{r.name || '—'}</td>
+                          <td className="table-td">
+                            <span className="font-mono text-xs text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-900/30 px-1.5 py-0.5 rounded">{r.ip_address}</span>
+                          </td>
+                          <td className="table-td text-xs text-gray-500 dark:text-slate-400 max-w-[160px] truncate" title={r.raw_ips}>{r.raw_ips}</td>
+                          <td className="table-td text-xs text-gray-600 dark:text-slate-300">{r.asset_type || '—'}</td>
+                          <td className="table-td text-xs text-gray-600 dark:text-slate-300">{r.location || '—'}</td>
+                          <td className="table-td text-xs text-gray-600 dark:text-slate-300">{r.department || '—'}</td>
+                        </>}
+                        {tab === 'tenable_only' && <>
+                          <td className="table-td">
+                            <span className="font-mono text-xs text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/30 px-1.5 py-0.5 rounded">{r.ip_address}</span>
+                          </td>
+                          <td className="table-td text-xs text-gray-700 dark:text-slate-300">{r.host_name || '—'}</td>
+                          <td className="table-td text-xs text-gray-700 dark:text-slate-300">{r.name || '—'}</td>
+                          <td className="table-td font-mono text-xs text-gray-500 dark:text-slate-400">{r.display_mac_address || '—'}</td>
+                          <td className="table-td text-xs text-gray-500 dark:text-slate-400 max-w-[160px] truncate" title={r.ipv4_addresses}>{r.ipv4_addresses || '—'}</td>
+                          <td className="table-td text-xs text-gray-500 dark:text-slate-400" title={fmtDate(r.last_observed)}>{timeAgo(r.last_observed)}</td>
+                          <td className="table-td text-xs text-gray-600 dark:text-slate-300 max-w-[150px] truncate" title={r.operating_systems}>{r.operating_systems || '—'}</td>
+                        </>}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
 
           {/* Pagination */}
