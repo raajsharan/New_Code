@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 import {
   PlusCircle, RotateCcw, Download, List, Plus,
   Search, Edit2, Trash2, ChevronLeft, ChevronRight,
-  RefreshCw, CheckCircle, AlertTriangle, Info, Filter, ArrowRight,
+  RefreshCw, CheckCircle, AlertTriangle, Info, ArrowRight,
 } from 'lucide-react';
 
 const BEIJING_INIT = {
@@ -17,7 +17,6 @@ const BEIJING_INIT = {
   serial_number: '', eol_status: '', asset_tag: '', additional_remarks: '',
 };
 
-const STATUS_LABELS   = { '': 'All', pending: 'Pending', migrated: 'Migrated' };
 const EOL_OPTIONS     = ['', 'InSupport', 'EOL', 'Decom', 'Not Applicable'];
 const SVRSTATUS_OPTS  = ['', 'Alive', 'Powered Off', 'Not Alive'];
 
@@ -240,20 +239,19 @@ function BeijingListTab({ onEdit, refreshKey }) {
   const [loading,   setLoading]   = useState(true);
   const [exporting, setExporting] = useState(false);
   const [search,    setSearch]    = useState('');
-  const [status,    setStatus]    = useState('');
   const [migrating, setMigrating] = useState(null);
 
   const fetchAssets = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await beijingAssetsAPI.getAll({ page, limit, search, status });
+      const res = await beijingAssetsAPI.getAll({ page, limit, search });
       setAssets(res.data.assets);
       setTotal(res.data.total);
     } catch { toast.error('Failed to load Beijing Asset List'); }
     finally { setLoading(false); }
-  }, [page, limit, search, status]);
+  }, [page, limit, search]);
 
-  useEffect(() => { setPage(1); }, [search, status]); // eslint-disable-line
+  useEffect(() => { setPage(1); }, [search]); // eslint-disable-line
   useEffect(() => { fetchAssets(); }, [fetchAssets, refreshKey]);
 
   const handleDelete = (a) => {
@@ -288,7 +286,7 @@ function BeijingListTab({ onEdit, refreshKey }) {
   const handleExport = async () => {
     setExporting(true);
     try {
-      const res = await beijingAssetsAPI.exportCSV({ status });
+      const res = await beijingAssetsAPI.exportCSV({});
       const url = URL.createObjectURL(new Blob([res.data]));
       const a   = document.createElement('a');
       a.href     = url;
@@ -339,22 +337,6 @@ function BeijingListTab({ onEdit, refreshKey }) {
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
-          </div>
-          <div className="flex items-center gap-2">
-            <Filter size={13} className="text-gray-400" />
-            {Object.entries(STATUS_LABELS).map(([val, lbl]) => (
-              <button
-                key={val}
-                onClick={() => setStatus(val)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                  status === val
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600'
-                }`}
-              >
-                {lbl}
-              </button>
-            ))}
           </div>
         </div>
       </div>
