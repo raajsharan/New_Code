@@ -78,6 +78,8 @@ export default function SoftwareDeploymentPage() {
   const [meConfigDirty, setMeConfigDirty] = useState({ server_url: '', api_key: '' });
   const [meConfigLoaded, setMeConfigLoaded] = useState(false);
   const [meSaving, setMeSaving]         = useState(false);
+  const [meTesting, setMeTesting]       = useState(false);
+  const [meTestResult, setMeTestResult] = useState(null); // { ok, message/error }
   const [meShowKey, setMeShowKey]       = useState(false);
   const [meAgents, setMeAgents]         = useState([]);
   const [meTotal, setMeTotal]           = useState(0);
@@ -107,6 +109,21 @@ export default function SoftwareDeploymentPage() {
       await loadMeConfig();
     } catch (e) { toast.error(e?.response?.data?.error || 'Save failed'); }
     finally { setMeSaving(false); }
+  };
+
+  const testMeConnection = async () => {
+    setMeTesting(true);
+    setMeTestResult(null);
+    try {
+      const r = await deploymentAPI.testMeConnection({ server_url: meConfigDirty.server_url });
+      setMeTestResult(r.data);
+      if (r.data.ok) toast.success(r.data.message || 'Connection successful');
+      else toast.error(r.data.error || 'Connection failed');
+    } catch (e) {
+      const msg = e?.response?.data?.error || 'Connection test failed';
+      setMeTestResult({ ok: false, error: msg });
+      toast.error(msg);
+    } finally { setMeTesting(false); }
   };
 
   const loadMeAgents = useCallback(async () => {
@@ -915,11 +932,21 @@ export default function SoftwareDeploymentPage() {
                 </div>
               </div>
             </div>
-            <div className="flex items-center justify-between">
+            {meTestResult && (
+              <div className={`text-xs rounded-lg px-3 py-2 border ${meTestResult.ok ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+                {meTestResult.ok ? `✓ ${meTestResult.message}` : `✗ ${meTestResult.error}`}
+              </div>
+            )}
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <p className="text-xs text-gray-400">API requests are proxied through the backend server. The key is stored server-side only.</p>
-              <button type="button" className="btn-primary text-xs" onClick={saveMeConfig} disabled={meSaving}>
-                <Save size={13} /> {meSaving ? 'Saving…' : 'Save Config'}
-              </button>
+              <div className="flex gap-2">
+                <button type="button" className="btn-secondary text-xs" onClick={testMeConnection} disabled={meTesting || !meConfigDirty.server_url}>
+                  <Activity size={13} /> {meTesting ? 'Testing…' : 'Test Connection'}
+                </button>
+                <button type="button" className="btn-primary text-xs" onClick={saveMeConfig} disabled={meSaving}>
+                  <Save size={13} /> {meSaving ? 'Saving…' : 'Save Config'}
+                </button>
+              </div>
             </div>
           </div>
 

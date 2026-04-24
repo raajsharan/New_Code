@@ -49,6 +49,7 @@ export const deploymentAPI = {
   checkDuplicates: (endpoint_ids) => api.post('/deployment/check-duplicates', { endpoint_ids }),
   getMeConfig: () => api.get('/deployment/me-config'),
   saveMeConfig: (d) => api.put('/deployment/me-config', d),
+  testMeConnection: (d) => api.post('/deployment/me-test-connection', d),
   getMeAgentStatus: (params) => api.get('/deployment/me-agent-status', { params }),
 };
 

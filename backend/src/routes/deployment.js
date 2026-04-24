@@ -888,6 +888,48 @@ router.put('/me-config', auth, requireAdmin, async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'Failed to save ME config' }); }
 });
 
+// POST /api/deployment/me-test-connection  — quick connectivity check
+router.post('/me-test-connection', auth, requireAdmin, async (req, res) => {
+  try {
+    let { server_url, api_key } = req.body || {};
+    if (!server_url) {
+      const r = await pool.query('SELECT setting_value FROM app_settings WHERE setting_key=$1', [ME_CONFIG_KEY]);
+      if (r.rows.length) { const cfg = JSON.parse(r.rows[0].setting_value||'{}'); server_url = cfg.server_url; api_key = api_key || cfg.api_key; }
+    }
+    if (!server_url) return res.status(400).json({ ok: false, error: 'Server URL is required' });
+    if (!/^https?:\/\//i.test(server_url)) server_url = 'https://' + server_url.trim();
+    server_url = server_url.replace(/\/$/, '');
+
+    const https = require('https');
+    const http  = require('http');
+    const parsed = new URL(server_url);
+    const mod = parsed.protocol === 'https:' ? https : http;
+
+    await new Promise((resolve, reject) => {
+      const reqH = mod.request({
+        hostname: parsed.hostname,
+        port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+        path: '/',
+        method: 'HEAD',
+        rejectUnauthorized: false,
+        timeout: 8000,
+      }, (resp) => resolve(resp.statusCode));
+      reqH.on('error', (err) => {
+        if (err.code === 'ENOTFOUND') reject(new Error(`DNS lookup failed for "${parsed.hostname}". The hostname is not reachable from the backend server.`));
+        else if (err.code === 'ECONNREFUSED') reject(new Error(`Connection refused on port ${parsed.port || (parsed.protocol==='https:'?443:80)}. Check the port number.`));
+        else if (err.code === 'ETIMEDOUT') reject(new Error(`Timeout reaching ${parsed.hostname}. Firewall or wrong IP/hostname.`));
+        else reject(err);
+      });
+      reqH.on('timeout', () => { reqH.destroy(); reject(new Error('Connection timed out (8s)')); });
+      reqH.end();
+    });
+
+    res.json({ ok: true, message: `Successfully reached ${parsed.hostname}:${parsed.port || (parsed.protocol==='https:'?443:80)}` });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 // GET /api/deployment/me-agent-status
 router.get('/me-agent-status', auth, requireAdmin, async (req, res) => {
   try {
@@ -896,14 +938,20 @@ router.get('/me-agent-status', auth, requireAdmin, async (req, res) => {
     const cfg = JSON.parse(r.rows[0].setting_value || '{}');
     if (!cfg.server_url || !cfg.api_key) return res.status(400).json({ error: 'Server URL and API key are required' });
 
-    const baseUrl = cfg.server_url.replace(/\/$/, '');
+    // Normalise URL — add https:// if no protocol given
+    let baseUrl = cfg.server_url.trim().replace(/\/$/, '');
+    if (!/^https?:\/\//i.test(baseUrl)) baseUrl = 'https://' + baseUrl;
+
     const { search = '', page = 1, page_size = 200, filterby = 'allcomputers' } = req.query;
 
     const https = require('https');
     const http  = require('http');
 
     const fetchMe = (url, apiKey) => new Promise((resolve, reject) => {
-      const parsed = new URL(url);
+      let parsed;
+      try { parsed = new URL(url); }
+      catch { return reject(new Error(`Invalid server URL: ${url}`)); }
+
       const mod = parsed.protocol === 'https:' ? https : http;
       const options = {
         hostname: parsed.hostname,
@@ -912,7 +960,7 @@ router.get('/me-agent-status', auth, requireAdmin, async (req, res) => {
         method: 'GET',
         headers: { 'Authorization': apiKey, 'Content-Type': 'application/json' },
         rejectUnauthorized: false,
-        timeout: 15000,
+        timeout: 20000,
       };
       const reqH = mod.request(options, (resp) => {
         let data = '';
@@ -922,8 +970,17 @@ router.get('/me-agent-status', auth, requireAdmin, async (req, res) => {
           catch { resolve({ status: resp.statusCode, body: data }); }
         });
       });
-      reqH.on('error', reject);
-      reqH.on('timeout', () => { reqH.destroy(); reject(new Error('Request timeout')); });
+      reqH.on('error', (err) => {
+        if (err.code === 'ENOTFOUND')
+          reject(new Error(`Cannot resolve hostname "${parsed.hostname}". Check the server URL is correct and reachable from the backend server.`));
+        else if (err.code === 'ECONNREFUSED')
+          reject(new Error(`Connection refused to ${parsed.hostname}:${options.port}. Verify the port and that the ME server is running.`));
+        else if (err.code === 'ETIMEDOUT' || err.code === 'ESOCKETTIMEDOUT')
+          reject(new Error(`Connection timed out reaching ${parsed.hostname}. The server may be unreachable or blocked by a firewall.`));
+        else
+          reject(err);
+      });
+      reqH.on('timeout', () => { reqH.destroy(); reject(new Error(`Request timed out after 20s reaching ${parsed.hostname}`)); });
       reqH.end();
     });
 
@@ -931,8 +988,11 @@ router.get('/me-agent-status', auth, requireAdmin, async (req, res) => {
     const apiUrl = `${baseUrl}/api/1.4/som/computers?filterby=${encodeURIComponent(filterby)}&resindex=${resindex}&count=${page_size}`;
     const result = await fetchMe(apiUrl, cfg.api_key);
 
+    if (result.status === 401 || result.status === 403) {
+      return res.status(502).json({ error: `Authentication failed (HTTP ${result.status}). Check your API key is valid and has read access.` });
+    }
     if (result.status !== 200) {
-      return res.status(502).json({ error: `ManageEngine API returned ${result.status}`, detail: result.body });
+      return res.status(502).json({ error: `ManageEngine API returned HTTP ${result.status}`, detail: result.body });
     }
 
     const raw = result.body;
