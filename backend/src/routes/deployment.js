@@ -984,34 +984,45 @@ router.get('/me-agent-status', auth, requireAdmin, async (req, res) => {
       reqH.end();
     });
 
-    const resindex = (Number(page) - 1) * Number(page_size);
-    const apiKey   = cfg.api_key;
+    const apiKey  = cfg.api_key;
+    const pageNum = Number(page);
+    const pgSize  = Number(page_size);
 
-    // Build candidate URLs — try multiple paths/param styles until one works
-    // ME EC requires authtoken as a QUERY PARAM (not just header) on most versions
-    const mkUrl = (path, extra = '') => {
-      const qs = new URLSearchParams({ authtoken: apiKey, resindex: String(resindex), count: String(page_size) });
-      if (extra) qs.set('filterby', extra);
+    // ME EC has two pagination styles — try both
+    const mkUrl = (path, paramStyle = 'resindex', fb = '') => {
+      const qs = new URLSearchParams({ authtoken: apiKey });
+      if (paramStyle === 'resindex') {
+        qs.set('resindex', String((pageNum - 1) * pgSize));
+        qs.set('count', String(pgSize));
+      } else {
+        qs.set('page', String(pageNum));
+        qs.set('pagelimit', String(pgSize));
+      }
+      if (fb) qs.set('filterby', fb);
       return `${baseUrl}${path}?${qs.toString()}`;
     };
 
-    // Ordered list of candidates: prefer the standard EC path, fall back to older DC path
+    // filterby string used only when user picked something other than "all"
+    const fb = (filterby && filterby !== 'allcomputers') ? filterby : '';
+
+    // Ordered candidates — first 200-success wins
     const candidates = [
-      mkUrl('/api/1.4/som/computers', filterby !== 'allcomputers' ? filterby : ''),
-      mkUrl('/api/1.4/som/computers'),                        // no filterby
-      mkUrl('/api/1.4/desktop/computers', filterby !== 'allcomputers' ? filterby : ''),
-      mkUrl('/api/1.4/desktop/computers'),
+      mkUrl('/api/1.4/som/computers',   'resindex', fb),   // EC standard, resindex style
+      mkUrl('/api/1.4/som/computers',   'page',     fb),   // EC standard, page style
+      mkUrl('/api/1.4/som/computers',   'resindex', ''),   // no filterby
+      mkUrl('/api/1.4/som/computers',   'page',     ''),
     ];
 
     let result = null;
-    let lastUrl = '';
+    const attempts = [];
     for (const url of candidates) {
-      lastUrl = url.replace(/authtoken=[^&]+/, 'authtoken=***');  // sanitise for logs
-      console.log('ME EC trying:', lastUrl);
+      const safeUrl = url.replace(/authtoken=[^&]+/, 'authtoken=***');
+      console.log('ME EC trying:', safeUrl);
       result = await fetchMe(url, apiKey);
+      const bodySnip = JSON.stringify(result.body)?.slice(0, 400) || '';
+      attempts.push({ status: result.status, url: safeUrl, body: bodySnip });
+      console.log(`ME EC ${result.status}:`, bodySnip);
       if (result.status === 200) break;
-      console.log(`ME EC ${result.status} from ${lastUrl}:`, JSON.stringify(result.body)?.slice(0, 300));
-      // Don't retry on auth failures — key is wrong
       if (result.status === 401 || result.status === 403) break;
     }
 
@@ -1019,8 +1030,15 @@ router.get('/me-agent-status', auth, requireAdmin, async (req, res) => {
       return res.status(502).json({ error: `Authentication failed (HTTP ${result.status}). Check your API key has read access.` });
     }
     if (result.status !== 200) {
-      const detail = typeof result.body === 'object' ? result.body : String(result.body).slice(0, 500);
-      return res.status(502).json({ error: `ManageEngine API returned HTTP ${result.status}`, detail, tried_url: lastUrl });
+      // Return the first non-404 attempt detail — most likely to explain the real problem
+      const best = attempts.find(a => a.status !== 404) || attempts[attempts.length - 1];
+      let detail;
+      try { detail = typeof best.body === 'string' ? JSON.parse(best.body) : best.body; } catch { detail = best.body; }
+      return res.status(502).json({
+        error: `ManageEngine API returned HTTP ${best.status}`,
+        detail,
+        all_attempts: attempts.map(a => ({ status: a.status, url: a.url })),
+      });
     }
 
     const raw = result.body;
