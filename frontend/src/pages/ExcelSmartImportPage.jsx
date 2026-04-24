@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
-import { assetsAPI, extendedInventoryAPI } from '../services/api';
+import { assetsAPI, extendedInventoryAPI, beijingAssetsAPI } from '../services/api';
 import { Download, FileSpreadsheet, Upload, CheckCircle2, AlertCircle } from 'lucide-react';
 
 const TARGETS = {
@@ -19,6 +19,14 @@ const TARGETS = {
     importFile: (file) => extendedInventoryAPI.importCSV(file, { import_source: 'excel-smart-import' }),
     previewFile: (file, meta = {}) => extendedInventoryAPI.previewImportCSV(file, meta),
     importSelectedRows: (rows, options = {}) => extendedInventoryAPI.importSelectedCSVRows(rows, { only_verified: true, import_source: 'excel-smart-import', ...options }),
+  },
+  beijing: {
+    label: 'Beijing Asset List',
+    templateName: 'beijing_assets_template.csv',
+    downloadTemplate: () => beijingAssetsAPI.downloadTemplate(),
+    importFile: (file) => beijingAssetsAPI.importFile(file),
+    previewFile: (file) => beijingAssetsAPI.previewFile(file),
+    importSelectedRows: (rows) => beijingAssetsAPI.importSelected(rows),
   },
 };
 
@@ -179,7 +187,7 @@ export default function ExcelSmartImportPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Excel Smart Import</h1>
           <p className="text-sm text-gray-500">
-            Upload Excel/CSV with random columns, auto-map against template fields, and import into Asset List or Ext. Asset List.
+            Upload Excel/CSV with random columns, auto-map against template fields, and import into Asset List, Ext. Asset List, or Beijing Asset List.
           </p>
         </div>
       </div>
@@ -191,6 +199,7 @@ export default function ExcelSmartImportPage() {
             <select className="input-field" value={target} onChange={(e) => setTarget(e.target.value)}>
               <option value="assets">Asset List</option>
               <option value="ext">Ext. Asset List</option>
+              <option value="beijing">Beijing Asset List</option>
             </select>
           </div>
           <div>

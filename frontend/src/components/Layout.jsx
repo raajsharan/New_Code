@@ -45,7 +45,6 @@ const ADMIN_NAV = [
   { to: '/transfer-to-inventory',        icon: ArrowRight, label: 'Transfer to Inventory',    key: 'transfer-to-inventory' },
   { to: '/new-asset-import',             icon: DownloadCloud, label: 'New Asset Import',       key: 'new-asset-import' },
   { to: '/excel-smart-import',           icon: DownloadCloud, label: 'Excel Smart Import',     key: 'excel-smart-import' },
-  { to: '/beijing-import',               icon: DownloadCloud, label: 'Beijing Asset Import',    key: 'beijing-import' },
   { to: '/import-audit-report',          icon: Search,     label: 'Import Audit Report',       key: 'import-audit-report' },
   { to: '/dept-range-management',        icon: Tag,        label: 'Dept. Tag Ranges',         key: 'dept-range-management' },
   { to: '/dashboard-icons',             icon: BarChart2,  label: 'Dashboard Icons',           key: 'dashboard-icons' },

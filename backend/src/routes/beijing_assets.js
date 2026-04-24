@@ -398,6 +398,67 @@ router.post('/import-selected', auth, requireAdmin, async (req, res) => {
   }
 });
 
+// POST /api/beijing-assets  (create a single asset manually)
+router.post('/', auth, requireAdmin, async (req, res) => {
+  try {
+    const ip = (req.body.ip_address || '').trim();
+    if (!ip) return res.status(400).json({ error: 'IP address is required' });
+
+    const [aRes, eRes, bRes] = await Promise.all([
+      pool.query("SELECT 1 FROM assets WHERE LOWER(TRIM(ip_address)) = LOWER($1) LIMIT 1", [ip]),
+      pool.query("SELECT 1 FROM extended_inventory WHERE LOWER(TRIM(ip_address)) = LOWER($1) LIMIT 1", [ip]),
+      pool.query("SELECT 1 FROM beijing_assets WHERE LOWER(TRIM(ip_address)) = LOWER($1) LIMIT 1", [ip]),
+    ]);
+    if (aRes.rows.length) return res.status(400).json({ error: 'IP already exists in Asset List', duplicate: true });
+    if (eRes.rows.length) return res.status(400).json({ error: 'IP already exists in Ext. Asset List', duplicate: true });
+    if (bRes.rows.length) return res.status(400).json({ error: 'IP already exists in Beijing Asset List', duplicate: true });
+
+    const FIELDS = ['vm_name','os_hostname','asset_type','os_type','os_version','assigned_user',
+      'department','location','business_purpose','server_status','serial_number',
+      'eol_status','asset_tag','additional_remarks'];
+
+    const { rows } = await pool.query(
+      `INSERT INTO beijing_assets
+         (ip_address,vm_name,os_hostname,asset_type,os_type,os_version,
+          assigned_user,department,location,business_purpose,server_status,
+          serial_number,eol_status,asset_tag,additional_remarks,submitted_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+       RETURNING *`,
+      [ip, ...FIELDS.map(f => req.body[f] || null), req.user?.username || null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/beijing-assets/check-duplicate
+router.get('/check-duplicate', auth, async (req, res) => {
+  try {
+    const ip = (req.query.ip || '').trim();
+    const excludeId = req.query.exclude_id ? parseInt(req.query.exclude_id) : null;
+    if (!ip) return res.json({ duplicate: false });
+
+    const [aRes, eRes, bRes] = await Promise.all([
+      pool.query("SELECT 1 FROM assets WHERE LOWER(TRIM(ip_address)) = LOWER($1) LIMIT 1", [ip]),
+      pool.query("SELECT 1 FROM extended_inventory WHERE LOWER(TRIM(ip_address)) = LOWER($1) LIMIT 1", [ip]),
+      pool.query(
+        excludeId
+          ? "SELECT 1 FROM beijing_assets WHERE LOWER(TRIM(ip_address)) = LOWER($1) AND id <> $2 LIMIT 1"
+          : "SELECT 1 FROM beijing_assets WHERE LOWER(TRIM(ip_address)) = LOWER($1) LIMIT 1",
+        excludeId ? [ip, excludeId] : [ip]
+      ),
+    ]);
+
+    if (aRes.rows.length) return res.json({ duplicate: true, message: 'IP already exists in Asset List' });
+    if (eRes.rows.length) return res.json({ duplicate: true, message: 'IP already exists in Ext. Asset List' });
+    if (bRes.rows.length) return res.json({ duplicate: true, message: 'IP already exists in Beijing Asset List' });
+    res.json({ duplicate: false });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // DELETE /api/beijing-assets/:id
 router.delete('/:id', auth, requireAdmin, async (req, res) => {
   try {
