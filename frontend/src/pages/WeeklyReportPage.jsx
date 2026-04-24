@@ -638,34 +638,34 @@ export default function WeeklyReportPage({ embedded = false }) {
                         <th className="text-center px-2 sm:px-3 py-2.5 sm:py-3 border-b border-blue-300 font-semibold whitespace-nowrap">Percentage</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white">
+                    <tbody className="bg-white dark:bg-slate-900">
                       {metrics.locationPatchingRows.map((row, idx) => (
-                        <tr key={row.location} className={`${idx % 2 === 0 ? 'bg-slate-50' : 'bg-white'} hover:bg-blue-50 transition-colors`}>
-                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 font-semibold text-gray-900 whitespace-nowrap">{row.location}</td>
-                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 text-center">{row.alive_powered_off || '-'}</td>
-                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 text-center font-semibold text-green-700">{row.auto || '-'}</td>
-                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 text-center">{row.beijing_it_team || '-'}</td>
-                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 text-center">{row.eol_no_patches || '-'}</td>
-                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 text-center">{row.exception || '-'}</td>
-                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 text-center font-semibold text-blue-700">{row.manual || '-'}</td>
-                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 text-center">{row.on_hold || '-'}</td>
-                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 text-center">{row.onboard_pending || '-'}</td>
-                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 text-center font-bold text-slate-900">{row.total}</td>
-                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 text-center font-bold text-slate-900">{row.percentage}</td>
+                        <tr key={row.location} className={`${idx % 2 === 0 ? 'bg-slate-50 dark:bg-slate-800/60' : 'bg-white dark:bg-slate-900'} hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors`}>
+                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 dark:border-slate-700 font-semibold text-gray-900 dark:text-slate-100 whitespace-nowrap">{row.location}</td>
+                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 dark:border-slate-700 text-center dark:text-slate-300">{row.alive_powered_off || '-'}</td>
+                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 dark:border-slate-700 text-center font-semibold text-green-700 dark:text-green-400">{row.auto || '-'}</td>
+                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 dark:border-slate-700 text-center dark:text-slate-300">{row.beijing_it_team || '-'}</td>
+                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 dark:border-slate-700 text-center dark:text-slate-300">{row.eol_no_patches || '-'}</td>
+                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 dark:border-slate-700 text-center dark:text-slate-300">{row.exception || '-'}</td>
+                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 dark:border-slate-700 text-center font-semibold text-blue-700 dark:text-blue-400">{row.manual || '-'}</td>
+                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 dark:border-slate-700 text-center dark:text-slate-300">{row.on_hold || '-'}</td>
+                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 dark:border-slate-700 text-center dark:text-slate-300">{row.onboard_pending || '-'}</td>
+                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 dark:border-slate-700 text-center font-bold text-slate-900 dark:text-white">{row.total}</td>
+                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 dark:border-slate-700 text-center font-bold text-slate-900 dark:text-white">{row.percentage}%</td>
                         </tr>
                       ))}
-                      <tr className="bg-slate-100">
-                        <td className="px-3 py-3 border-t border-slate-300 font-bold text-gray-900">Total</td>
-                        <td className="px-3 py-3 border-t border-slate-300 text-center font-bold">{metrics.locationPatchingTotals.alive_powered_off || '-'}</td>
-                        <td className="px-3 py-3 border-t border-slate-300 text-center font-bold text-green-700">{metrics.locationPatchingTotals.auto || '-'}</td>
-                        <td className="px-3 py-3 border-t border-slate-300 text-center font-bold">{metrics.locationPatchingTotals.beijing_it_team || '-'}</td>
-                        <td className="px-3 py-3 border-t border-slate-300 text-center font-bold">{metrics.locationPatchingTotals.eol_no_patches || '-'}</td>
-                        <td className="px-3 py-3 border-t border-slate-300 text-center font-bold">{metrics.locationPatchingTotals.exception || '-'}</td>
-                        <td className="px-3 py-3 border-t border-slate-300 text-center font-bold text-blue-700">{metrics.locationPatchingTotals.manual || '-'}</td>
-                        <td className="px-3 py-3 border-t border-slate-300 text-center font-bold">{metrics.locationPatchingTotals.on_hold || '-'}</td>
-                        <td className="px-3 py-3 border-t border-slate-300 text-center font-bold">{metrics.locationPatchingTotals.onboard_pending || '-'}</td>
-                        <td className="px-3 py-3 border-t border-slate-300 text-center font-bold text-slate-900">{metrics.locationPatchingTotals.total}</td>
-                        <td className="px-3 py-3 border-t border-slate-300 text-center font-bold text-slate-900">{metrics.locationPatchingTotals.percentage}</td>
+                      <tr className="bg-slate-100 dark:bg-slate-700/60">
+                        <td className="px-3 py-3 border-t border-slate-300 dark:border-slate-600 font-bold text-gray-900 dark:text-white">Total</td>
+                        <td className="px-3 py-3 border-t border-slate-300 dark:border-slate-600 text-center font-bold dark:text-slate-200">{metrics.locationPatchingTotals.alive_powered_off || '-'}</td>
+                        <td className="px-3 py-3 border-t border-slate-300 dark:border-slate-600 text-center font-bold text-green-700 dark:text-green-400">{metrics.locationPatchingTotals.auto || '-'}</td>
+                        <td className="px-3 py-3 border-t border-slate-300 dark:border-slate-600 text-center font-bold dark:text-slate-200">{metrics.locationPatchingTotals.beijing_it_team || '-'}</td>
+                        <td className="px-3 py-3 border-t border-slate-300 dark:border-slate-600 text-center font-bold dark:text-slate-200">{metrics.locationPatchingTotals.eol_no_patches || '-'}</td>
+                        <td className="px-3 py-3 border-t border-slate-300 dark:border-slate-600 text-center font-bold dark:text-slate-200">{metrics.locationPatchingTotals.exception || '-'}</td>
+                        <td className="px-3 py-3 border-t border-slate-300 dark:border-slate-600 text-center font-bold text-blue-700 dark:text-blue-400">{metrics.locationPatchingTotals.manual || '-'}</td>
+                        <td className="px-3 py-3 border-t border-slate-300 dark:border-slate-600 text-center font-bold dark:text-slate-200">{metrics.locationPatchingTotals.on_hold || '-'}</td>
+                        <td className="px-3 py-3 border-t border-slate-300 dark:border-slate-600 text-center font-bold dark:text-slate-200">{metrics.locationPatchingTotals.onboard_pending || '-'}</td>
+                        <td className="px-3 py-3 border-t border-slate-300 dark:border-slate-600 text-center font-bold text-slate-900 dark:text-white">{metrics.locationPatchingTotals.total}</td>
+                        <td className="px-3 py-3 border-t border-slate-300 dark:border-slate-600 text-center font-bold text-slate-900 dark:text-white">{metrics.locationPatchingTotals.percentage}%</td>
                       </tr>
                     </tbody>
                   </table>
@@ -689,34 +689,34 @@ export default function WeeklyReportPage({ embedded = false }) {
                         <th className="text-center px-2 sm:px-3 py-2.5 sm:py-3 border-b border-indigo-300 font-semibold whitespace-nowrap">Percentage</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white">
+                    <tbody className="bg-white dark:bg-slate-900">
                       {metrics.departmentPatchingRows.map((row, idx) => (
-                        <tr key={row.location} className={`${idx % 2 === 0 ? 'bg-slate-50' : 'bg-white'} hover:bg-indigo-50 transition-colors`}>
-                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 font-semibold text-gray-900 whitespace-nowrap">{row.location}</td>
-                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 text-center">{row.alive_powered_off || '-'}</td>
-                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 text-center font-semibold text-green-700">{row.auto || '-'}</td>
-                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 text-center">{row.beijing_it_team || '-'}</td>
-                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 text-center">{row.eol_no_patches || '-'}</td>
-                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 text-center">{row.exception || '-'}</td>
-                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 text-center font-semibold text-blue-700">{row.manual || '-'}</td>
-                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 text-center">{row.on_hold || '-'}</td>
-                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 text-center">{row.onboard_pending || '-'}</td>
-                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 text-center font-bold text-slate-900">{row.total}</td>
-                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 text-center font-bold text-slate-900">{row.percentage}</td>
+                        <tr key={row.location} className={`${idx % 2 === 0 ? 'bg-slate-50 dark:bg-slate-800/60' : 'bg-white dark:bg-slate-900'} hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors`}>
+                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 dark:border-slate-700 font-semibold text-gray-900 dark:text-slate-100 whitespace-nowrap">{row.location}</td>
+                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 dark:border-slate-700 text-center dark:text-slate-300">{row.alive_powered_off || '-'}</td>
+                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 dark:border-slate-700 text-center font-semibold text-green-700 dark:text-green-400">{row.auto || '-'}</td>
+                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 dark:border-slate-700 text-center dark:text-slate-300">{row.beijing_it_team || '-'}</td>
+                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 dark:border-slate-700 text-center dark:text-slate-300">{row.eol_no_patches || '-'}</td>
+                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 dark:border-slate-700 text-center dark:text-slate-300">{row.exception || '-'}</td>
+                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 dark:border-slate-700 text-center font-semibold text-blue-700 dark:text-blue-400">{row.manual || '-'}</td>
+                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 dark:border-slate-700 text-center dark:text-slate-300">{row.on_hold || '-'}</td>
+                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 dark:border-slate-700 text-center dark:text-slate-300">{row.onboard_pending || '-'}</td>
+                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 dark:border-slate-700 text-center font-bold text-slate-900 dark:text-white">{row.total}</td>
+                          <td className="px-2 sm:px-3 py-2.5 border-b border-slate-200 dark:border-slate-700 text-center font-bold text-slate-900 dark:text-white">{row.percentage}%</td>
                         </tr>
                       ))}
-                      <tr className="bg-slate-100">
-                        <td className="px-3 py-3 border-t border-slate-300 font-bold text-gray-900">Total</td>
-                        <td className="px-3 py-3 border-t border-slate-300 text-center font-bold">{metrics.departmentPatchingTotals.alive_powered_off || '-'}</td>
-                        <td className="px-3 py-3 border-t border-slate-300 text-center font-bold text-green-700">{metrics.departmentPatchingTotals.auto || '-'}</td>
-                        <td className="px-3 py-3 border-t border-slate-300 text-center font-bold">{metrics.departmentPatchingTotals.beijing_it_team || '-'}</td>
-                        <td className="px-3 py-3 border-t border-slate-300 text-center font-bold">{metrics.departmentPatchingTotals.eol_no_patches || '-'}</td>
-                        <td className="px-3 py-3 border-t border-slate-300 text-center font-bold">{metrics.departmentPatchingTotals.exception || '-'}</td>
-                        <td className="px-3 py-3 border-t border-slate-300 text-center font-bold text-blue-700">{metrics.departmentPatchingTotals.manual || '-'}</td>
-                        <td className="px-3 py-3 border-t border-slate-300 text-center font-bold">{metrics.departmentPatchingTotals.on_hold || '-'}</td>
-                        <td className="px-3 py-3 border-t border-slate-300 text-center font-bold">{metrics.departmentPatchingTotals.onboard_pending || '-'}</td>
-                        <td className="px-3 py-3 border-t border-slate-300 text-center font-bold text-slate-900">{metrics.departmentPatchingTotals.total}</td>
-                        <td className="px-3 py-3 border-t border-slate-300 text-center font-bold text-slate-900">{metrics.departmentPatchingTotals.percentage}</td>
+                      <tr className="bg-slate-100 dark:bg-slate-700/60">
+                        <td className="px-3 py-3 border-t border-slate-300 dark:border-slate-600 font-bold text-gray-900 dark:text-white">Total</td>
+                        <td className="px-3 py-3 border-t border-slate-300 dark:border-slate-600 text-center font-bold dark:text-slate-200">{metrics.departmentPatchingTotals.alive_powered_off || '-'}</td>
+                        <td className="px-3 py-3 border-t border-slate-300 dark:border-slate-600 text-center font-bold text-green-700 dark:text-green-400">{metrics.departmentPatchingTotals.auto || '-'}</td>
+                        <td className="px-3 py-3 border-t border-slate-300 dark:border-slate-600 text-center font-bold dark:text-slate-200">{metrics.departmentPatchingTotals.beijing_it_team || '-'}</td>
+                        <td className="px-3 py-3 border-t border-slate-300 dark:border-slate-600 text-center font-bold dark:text-slate-200">{metrics.departmentPatchingTotals.eol_no_patches || '-'}</td>
+                        <td className="px-3 py-3 border-t border-slate-300 dark:border-slate-600 text-center font-bold dark:text-slate-200">{metrics.departmentPatchingTotals.exception || '-'}</td>
+                        <td className="px-3 py-3 border-t border-slate-300 dark:border-slate-600 text-center font-bold text-blue-700 dark:text-blue-400">{metrics.departmentPatchingTotals.manual || '-'}</td>
+                        <td className="px-3 py-3 border-t border-slate-300 dark:border-slate-600 text-center font-bold dark:text-slate-200">{metrics.departmentPatchingTotals.on_hold || '-'}</td>
+                        <td className="px-3 py-3 border-t border-slate-300 dark:border-slate-600 text-center font-bold dark:text-slate-200">{metrics.departmentPatchingTotals.onboard_pending || '-'}</td>
+                        <td className="px-3 py-3 border-t border-slate-300 dark:border-slate-600 text-center font-bold text-slate-900 dark:text-white">{metrics.departmentPatchingTotals.total}</td>
+                        <td className="px-3 py-3 border-t border-slate-300 dark:border-slate-600 text-center font-bold text-slate-900 dark:text-white">{metrics.departmentPatchingTotals.percentage}%</td>
                       </tr>
                     </tbody>
                   </table>
