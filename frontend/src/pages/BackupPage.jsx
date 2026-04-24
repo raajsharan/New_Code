@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import {
   Database, Download, FileText, RefreshCw, Save, Shield,
   Clock, CheckCircle, AlertTriangle, Play, Calendar,
-  HardDrive, Layers, Info
+  HardDrive, Layers, Info, Globe
 } from 'lucide-react';
 
 // ── Shared sub-components ─────────────────────────────────────────────────────
@@ -151,8 +151,9 @@ function CsvExportTab({ schedule, onScheduleChange, onSaveSchedule, savingSchedu
     setExporting(true);
     try {
       const r = await backupAPI.csvExport({
-        include_assets: schedule.csv_include_assets,
-        include_ext:    schedule.csv_include_ext,
+        include_assets:  schedule.csv_include_assets,
+        include_ext:     schedule.csv_include_ext,
+        include_beijing: schedule.csv_include_beijing,
       });
       const { files } = r.data;
       for (const f of files) {
@@ -204,9 +205,19 @@ function CsvExportTab({ schedule, onScheduleChange, onSaveSchedule, savingSchedu
               <p className="text-xs text-gray-500">Network devices, switches, printers, UPS records</p>
             </div>
           </label>
+          <label className="flex items-center gap-3 p-3 border border-gray-200 rounded-xl hover:bg-gray-50 cursor-pointer">
+            <input type="checkbox" className="w-4 h-4 accent-blue-600"
+              checked={schedule.csv_include_beijing}
+              onChange={e => onScheduleChange('csv_include_beijing', e.target.checked)} />
+            <Globe size={16} className="text-blue-800 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-gray-800">Beijing Asset List</p>
+              <p className="text-xs text-gray-500">All Beijing assets with VM names, IPs, OS, migration status</p>
+            </div>
+          </label>
         </div>
         <button onClick={handleExport}
-          disabled={exporting || (!schedule.csv_include_assets && !schedule.csv_include_ext)}
+          disabled={exporting || (!schedule.csv_include_assets && !schedule.csv_include_ext && !schedule.csv_include_beijing)}
           className="btn-primary">
           <Download size={15}/> {exporting ? 'Exporting…' : 'Export Selected CSVs Now'}
         </button>
@@ -335,7 +346,7 @@ export default function BackupPage() {
     pg_enabled: false, pg_frequency: 'daily', pg_time: '02:00', pg_retain_days: 7,
     pg_backup_path: '/backups/postgres', pg_overwrite: false,
     csv_enabled: false, csv_frequency: 'daily', csv_time: '03:00', csv_retain_days: 7,
-    csv_include_assets: true, csv_include_ext: true,
+    csv_include_assets: true, csv_include_ext: true, csv_include_beijing: true,
     csv_backup_path: '/backups/csv', csv_overwrite: false,
   });
   const [log, setLog]             = useState([]);

@@ -511,4 +511,69 @@ router.put('/:id', auth, requireAdmin, async (req, res) => {
   }
 });
 
+// ─── CUSTOM FIELDS ────────────────────────────────────────────────────────────
+// Requires: beijing_custom_fields table + custom_field_values JSONB on beijing_assets
+// Run once on server:
+//   CREATE TABLE IF NOT EXISTS beijing_custom_fields (
+//     id SERIAL PRIMARY KEY, field_key VARCHAR(100) NOT NULL UNIQUE,
+//     field_label VARCHAR(200) NOT NULL, field_type VARCHAR(50) NOT NULL DEFAULT 'text',
+//     is_active BOOLEAN DEFAULT TRUE, display_order INTEGER DEFAULT 0,
+//     created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW()
+//   );
+//   ALTER TABLE beijing_assets ADD COLUMN IF NOT EXISTS custom_field_values JSONB DEFAULT '{}';
+
+// GET /api/beijing-assets/custom-fields
+router.get('/custom-fields', auth, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT * FROM beijing_custom_fields ORDER BY display_order, id');
+    res.json(r.rows);
+  } catch (e) {
+    if (e.code === '42P01') return res.json([]); // table doesn't exist yet
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/beijing-assets/custom-fields/add
+router.post('/custom-fields/add', auth, requireAdmin, async (req, res) => {
+  try {
+    const { field_label, field_type = 'text', display_order = 0 } = req.body || {};
+    if (!field_label?.trim()) return res.status(400).json({ error: 'field_label is required' });
+    const field_key = field_label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    const r = await pool.query(
+      `INSERT INTO beijing_custom_fields (field_key, field_label, field_type, display_order)
+       VALUES ($1,$2,$3,$4) RETURNING *`,
+      [field_key, field_label.trim(), field_type, display_order]
+    );
+    res.status(201).json(r.rows[0]);
+  } catch (e) {
+    if (e.code === '23505') return res.status(409).json({ error: 'A field with that name already exists' });
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// PUT /api/beijing-assets/custom-fields/:id
+router.put('/custom-fields/:id', auth, requireAdmin, async (req, res) => {
+  try {
+    const { field_label, field_type, is_active, display_order } = req.body || {};
+    const r = await pool.query(
+      `UPDATE beijing_custom_fields SET
+         field_label=COALESCE($1,field_label), field_type=COALESCE($2,field_type),
+         is_active=COALESCE($3,is_active), display_order=COALESCE($4,display_order),
+         updated_at=NOW()
+       WHERE id=$5 RETURNING *`,
+      [field_label||null, field_type||null, is_active!=null?is_active:null, display_order!=null?display_order:null, req.params.id]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(r.rows[0]);
+  } catch (e) { res.status(500).json({ error: 'Server error' }); }
+});
+
+// DELETE /api/beijing-assets/custom-fields/:id
+router.delete('/custom-fields/:id', auth, requireAdmin, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM beijing_custom_fields WHERE id=$1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Server error' }); }
+});
+
 module.exports = router;

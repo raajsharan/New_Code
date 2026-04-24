@@ -277,7 +277,7 @@ router.put('/dashboard-icons', auth, requireAdmin, async (req, res) => {
 
 
 // ── Column visibility config ───────────────────────────────────────────────────
-['asset', 'ext', 'vmware'].forEach(scope => {
+['asset', 'ext', 'vmware', 'beijing'].forEach(scope => {
   const dbKey = `column_config_${scope}`;
   router.get(`/column-config/${scope}`, auth, async (req, res) => {
     try {

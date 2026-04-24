@@ -5,7 +5,7 @@ import { useConfig } from '../context/ConfigContext';
 import toast from 'react-hot-toast';
 import {
   Save, RotateCcw, Eye, EyeOff, GripVertical,
-  List, Layers, ChevronUp, ChevronDown, Server
+  List, Layers, ChevronUp, ChevronDown, Server, Globe
 } from 'lucide-react';
 
 // ── All columns for Asset Inventory List ──────────────────────────────────────
@@ -89,7 +89,29 @@ const VMWARE_COLUMNS = [
   { key: 'reason',           label: 'Reason',             locked: false, defaultVisible: true },
 ];
 
-const DEFAULT_CONFIGS = { asset: ASSET_COLUMNS, ext: EXT_COLUMNS, vmware: VMWARE_COLUMNS };
+// ── All columns for Beijing Asset List ────────────────────────────────────────
+const BEIJING_COLUMNS = [
+  { key: 'vm_name',           label: 'VM Name',           locked: true,  defaultVisible: true },
+  { key: 'ip_address',        label: 'IP Address',        locked: true,  defaultVisible: true },
+  { key: 'os_hostname',       label: 'Hostname',          locked: false, defaultVisible: true },
+  { key: 'asset_type',        label: 'Asset Type',        locked: false, defaultVisible: true },
+  { key: 'os_type',           label: 'OS',                locked: false, defaultVisible: true },
+  { key: 'os_version',        label: 'OS Version',        locked: false, defaultVisible: false },
+  { key: 'assigned_user',     label: 'Assigned User',     locked: false, defaultVisible: true },
+  { key: 'department',        label: 'Department',        locked: false, defaultVisible: true },
+  { key: 'location',          label: 'Location',          locked: false, defaultVisible: true },
+  { key: 'server_status',     label: 'Server Status',     locked: false, defaultVisible: true },
+  { key: 'serial_number',     label: 'Serial No.',        locked: false, defaultVisible: true },
+  { key: 'eol_status',        label: 'EOL Status',        locked: false, defaultVisible: true },
+  { key: 'asset_tag',         label: 'Asset Tag',         locked: false, defaultVisible: false },
+  { key: 'business_purpose',  label: 'Business Purpose',  locked: false, defaultVisible: false },
+  { key: 'additional_remarks',label: 'Remarks',           locked: false, defaultVisible: false },
+  { key: 'is_migrated',       label: 'Migration Status',  locked: false, defaultVisible: true },
+  { key: 'migrated_by',       label: 'Migrated By',       locked: false, defaultVisible: false },
+  { key: 'actions',           label: 'Actions',           locked: true,  defaultVisible: true },
+];
+
+const DEFAULT_CONFIGS = { asset: ASSET_COLUMNS, ext: EXT_COLUMNS, vmware: VMWARE_COLUMNS, beijing: BEIJING_COLUMNS };
 
 // ── Merge saved config over defaults (handles new columns added later) ────────
 function mergeConfig(defaults, saved) {
@@ -167,19 +189,19 @@ export default function ColumnConfigPage() {
   const { isAdmin } = useAuth();
   const { configVersion } = useConfig();
   const [activeTab, setActiveTab] = useState('asset');
-  const [configs, setConfigs] = useState({ asset: null, ext: null, vmware: null });
+  const [configs, setConfigs] = useState({ asset: null, ext: null, vmware: null, beijing: null });
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const loadConfigs = useCallback(async () => {
     setLoading(true);
     try {
-      const [assetR, extR, vmwareR, cfAssetR, cfExtR] = await Promise.all([
+      const [assetR, extR, vmwareR, beijingR, cfAssetR, cfExtR] = await Promise.all([
         settingsAPI.getColumnConfig('asset').catch(() => ({ data: [] })),
         settingsAPI.getColumnConfig('ext').catch(() => ({ data: [] })),
         settingsAPI.getColumnConfig('vmware').catch(() => ({ data: [] })),
+        settingsAPI.getColumnConfig('beijing').catch(() => ({ data: [] })),
         settingsAPI.getCustomFields().catch(() => ({ data: [] })),
-        // Extended inventory custom fields via settings route (same table, scoped)
         settingsAPI.getCustomFields().catch(() => ({ data: [] })),
       ]);
 
@@ -209,9 +231,10 @@ export default function ColumnConfigPage() {
       const extBase   = [...EXT_COLUMNS,   ...cfExtCols];
 
       setConfigs({
-        asset: mergeConfig(assetBase, assetR.data),
-        ext:   mergeConfig(extBase,   extR.data),
-        vmware: mergeConfig(VMWARE_COLUMNS, vmwareR.data),
+        asset:   mergeConfig(assetBase,       assetR.data),
+        ext:     mergeConfig(extBase,          extR.data),
+        vmware:  mergeConfig(VMWARE_COLUMNS,   vmwareR.data),
+        beijing: mergeConfig(BEIJING_COLUMNS,  beijingR.data),
       });
     } catch { toast.error('Failed to load column config'); }
     finally { setLoading(false); }
@@ -245,7 +268,8 @@ export default function ColumnConfigPage() {
         key: c.key, visible: c.visible, order: i,
       }));
       await settingsAPI.saveColumnConfig(activeTab, toSave);
-      toast.success(`${activeTab === 'asset' ? 'Asset' : activeTab === 'ext' ? 'Ext. Asset' : 'VMware Candidates'} column config saved — changes apply immediately`);
+      const tabName = { asset: 'Asset', ext: 'Ext. Asset', vmware: 'VMware Candidates', beijing: 'Beijing Asset' }[activeTab] || activeTab;
+      toast.success(`${tabName} column config saved — changes apply immediately`);
     } catch { toast.error('Save failed'); }
     finally { setSaving(false); }
   };
@@ -307,7 +331,7 @@ export default function ColumnConfigPage() {
 
       {/* Tab switcher */}
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl mb-5 w-fit">
-        {[['asset', 'Asset Inventory List', List], ['ext', 'Ext. Asset Inventory List', Layers], ['vmware', 'New VM Candidates', Server]].map(([key, lbl, Icon]) => (
+        {[['asset', 'Asset Inventory List', List], ['ext', 'Ext. Asset Inventory List', Layers], ['vmware', 'New VM Candidates', Server], ['beijing', 'Beijing Asset List', Globe]].map(([key, lbl, Icon]) => (
           <button key={key} onClick={() => setActiveTab(key)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               activeTab === key ? 'bg-white text-blue-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'

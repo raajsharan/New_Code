@@ -309,6 +309,10 @@ export const beijingAssetsAPI = {
     return api.post('/beijing-assets/preview', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
   importSelected: (rows) => api.post('/beijing-assets/import-selected', { rows }),
+  getCustomFields:    ()          => api.get('/beijing-assets/custom-fields'),
+  addCustomField:     (d)         => api.post('/beijing-assets/custom-fields/add', d),
+  updateCustomField:  (id, d)     => api.put(`/beijing-assets/custom-fields/${id}`, d),
+  deleteCustomField:  (id)        => api.delete(`/beijing-assets/custom-fields/${id}`),
 };
 
 export const tenableAPI = {

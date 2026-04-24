@@ -28,6 +28,7 @@ const DEFAULT_SCHEDULE = {
   csv_retain_days: 7,
   csv_include_assets: true,
   csv_include_ext: true,
+  csv_include_beijing: true,
   csv_backup_path: '/backups/csv',
   csv_overwrite: false,
 };
@@ -150,8 +151,10 @@ function cleanupOldCsvBackups(dirPath, retainDays) {
       .filter((name) =>
         /^asset_inventory_.*\.csv$/i.test(name)
         || /^ext_inventory_.*\.csv$/i.test(name)
+        || /^beijing_inventory_.*\.csv$/i.test(name)
         || name === 'asset_inventory.csv'
         || name === 'ext_inventory.csv'
+        || name === 'beijing_inventory.csv'
       )
       .forEach((name) => {
         const full = path.join(dirPath, name);
@@ -163,7 +166,7 @@ function cleanupOldCsvBackups(dirPath, retainDays) {
   } catch {}
 }
 
-async function buildCsvSections({ include_assets = true, include_ext = true }) {
+async function buildCsvSections({ include_assets = true, include_ext = true, include_beijing = true }) {
   const results = {};
   if (include_assets) {
     const r = await pool.query(`
@@ -213,6 +216,20 @@ async function buildCsvSections({ include_assets = true, include_ext = true }) {
     }));
   }
 
+  if (include_beijing) {
+    try {
+      const r = await pool.query(`
+        SELECT id, vm_name, os_hostname, ip_address, asset_type, os_type, os_version,
+          assigned_user, department, location, business_purpose,
+          server_status, eol_status, serial_number, asset_tag, additional_remarks,
+          is_migrated, migrated_by, migrated_at, migration_comment,
+          submitted_by, created_at, updated_at
+        FROM beijing_assets
+        ORDER BY created_at DESC`);
+      results.beijing = r.rows;
+    } catch { /* table may not exist yet */ }
+  }
+
   const esc = (v) => {
     if (v === null || v === undefined || v === false) return '';
     if (v === true) return 'Yes';
@@ -228,8 +245,9 @@ async function buildCsvSections({ include_assets = true, include_ext = true }) {
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const sections = [];
-  if (results.assets) sections.push({ key: 'assets', name: `asset_inventory_${timestamp}.csv`, csv: toCSV(results.assets), count: results.assets.length });
-  if (results.ext) sections.push({ key: 'ext', name: `ext_inventory_${timestamp}.csv`, csv: toCSV(results.ext), count: results.ext.length });
+  if (results.assets)  sections.push({ key: 'assets',  name: `asset_inventory_${timestamp}.csv`,   csv: toCSV(results.assets),  count: results.assets.length });
+  if (results.ext)     sections.push({ key: 'ext',     name: `ext_inventory_${timestamp}.csv`,     csv: toCSV(results.ext),     count: results.ext.length });
+  if (results.beijing) sections.push({ key: 'beijing', name: `beijing_inventory_${timestamp}.csv`, csv: toCSV(results.beijing), count: results.beijing.length });
   return sections;
 }
 
@@ -237,10 +255,9 @@ function writeCsvSectionsToPath(sections, backupPath, overwrite) {
   const resolvedBackupPath = String(backupPath || '').trim();
   if (!resolvedBackupPath) return sections;
   fs.mkdirSync(resolvedBackupPath, { recursive: true });
+  const OVERWRITE_NAMES = { assets: 'asset_inventory.csv', ext: 'ext_inventory.csv', beijing: 'beijing_inventory.csv' };
   sections.forEach((section) => {
-    const filename = overwrite
-      ? (section.key === 'assets' ? 'asset_inventory.csv' : 'ext_inventory.csv')
-      : section.name;
+    const filename = overwrite ? (OVERWRITE_NAMES[section.key] || section.name) : section.name;
     const fullPath = path.join(resolvedBackupPath, filename);
     fs.writeFileSync(fullPath, section.csv || '', 'utf8');
     section.saved_path = fullPath;
@@ -295,6 +312,7 @@ async function runScheduledTasks() {
       const sections = await buildCsvSections({
         include_assets: schedule.csv_include_assets,
         include_ext: schedule.csv_include_ext,
+        include_beijing: schedule.csv_include_beijing,
       });
       const csvDir = schedule.csv_backup_path || '/backups/csv';
       writeCsvSectionsToPath(sections, csvDir, schedule.csv_overwrite);
@@ -392,11 +410,12 @@ router.post('/csv-export', auth, requireAdmin, async (req, res) => {
   const {
     include_assets = true,
     include_ext = true,
+    include_beijing = true,
     backup_path = '',
     overwrite = false,
   } = req.body || {};
   try {
-    const csvSections = await buildCsvSections({ include_assets, include_ext });
+    const csvSections = await buildCsvSections({ include_assets, include_ext, include_beijing });
     const resolvedBackupPath = String(backup_path || '').trim();
     writeCsvSectionsToPath(csvSections, resolvedBackupPath, overwrite);
 

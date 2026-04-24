@@ -58,6 +58,7 @@ const ADMIN_NAV = [
   { to: '/physical-asset-custom-fields', icon: HardDrive,  label: 'Physical Asset Config',    key: 'physical-asset-custom-fields' },
   { to: '/physical-server-models',       icon: HardDrive,  label: 'Server Models',            key: 'physical-assets' },
   { to: '/extended-custom-fields',       icon: Database,   label: 'Extended Inv. Fields',     key: 'extended-custom-fields' },
+  { to: '/beijing-asset-fields',         icon: Globe,      label: 'Beijing Asset Fields',      key: 'beijing-asset-fields' },
   { to: '/column-config',                  icon: List,       label: 'Column Config',          key: 'column-config' },
   { to: '/tenable-import',                 icon: DownloadCloud, label: 'Tenable Import',        key: 'tenable-import' },
 ];
