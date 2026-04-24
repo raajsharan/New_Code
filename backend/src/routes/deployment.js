@@ -854,4 +854,114 @@ router.get('/jobs/:id', auth, requireAdmin, async (req, res) => {
   res.json(job);
 });
 
+// ─── MANAGEENGINE ENDPOINT CENTRAL — SERVICE STATUS ──────────────────────────
+
+const ME_CONFIG_KEY = 'me_endpoint_central_config';
+
+// GET /api/deployment/me-config
+router.get('/me-config', auth, requireAdmin, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT setting_value FROM app_settings WHERE setting_key=$1', [ME_CONFIG_KEY]);
+    if (!r.rows.length) return res.json({ server_url: '', api_key: '', enabled: false, has_key: false });
+    const cfg = JSON.parse(r.rows[0].setting_value || '{}');
+    res.json({ server_url: cfg.server_url || '', api_key: cfg.api_key ? '***' : '', enabled: !!cfg.enabled, has_key: !!cfg.api_key });
+  } catch (e) { res.status(500).json({ error: 'Failed to load ME config' }); }
+});
+
+// PUT /api/deployment/me-config
+router.put('/me-config', auth, requireAdmin, async (req, res) => {
+  try {
+    const { server_url, api_key, enabled } = req.body || {};
+    const existing = await pool.query('SELECT setting_value FROM app_settings WHERE setting_key=$1', [ME_CONFIG_KEY]);
+    const prev = existing.rows.length ? JSON.parse(existing.rows[0].setting_value || '{}') : {};
+    const stored = {
+      server_url: String(server_url || prev.server_url || '').trim(),
+      api_key: api_key && api_key !== '***' ? String(api_key).trim() : (prev.api_key || ''),
+      enabled: enabled !== undefined ? !!enabled : !!prev.enabled,
+    };
+    await pool.query(
+      `INSERT INTO app_settings (setting_key, setting_value) VALUES ($1,$2)
+       ON CONFLICT (setting_key) DO UPDATE SET setting_value=$2, updated_at=NOW()`,
+      [ME_CONFIG_KEY, JSON.stringify(stored)]
+    );
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Failed to save ME config' }); }
+});
+
+// GET /api/deployment/me-agent-status
+router.get('/me-agent-status', auth, requireAdmin, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT setting_value FROM app_settings WHERE setting_key=$1', [ME_CONFIG_KEY]);
+    if (!r.rows.length) return res.status(400).json({ error: 'ManageEngine config not set' });
+    const cfg = JSON.parse(r.rows[0].setting_value || '{}');
+    if (!cfg.server_url || !cfg.api_key) return res.status(400).json({ error: 'Server URL and API key are required' });
+
+    const baseUrl = cfg.server_url.replace(/\/$/, '');
+    const { search = '', page = 1, page_size = 200, filterby = 'allcomputers' } = req.query;
+
+    const https = require('https');
+    const http  = require('http');
+
+    const fetchMe = (url, apiKey) => new Promise((resolve, reject) => {
+      const parsed = new URL(url);
+      const mod = parsed.protocol === 'https:' ? https : http;
+      const options = {
+        hostname: parsed.hostname,
+        port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+        path: parsed.pathname + parsed.search,
+        method: 'GET',
+        headers: { 'Authorization': apiKey, 'Content-Type': 'application/json' },
+        rejectUnauthorized: false,
+        timeout: 15000,
+      };
+      const reqH = mod.request(options, (resp) => {
+        let data = '';
+        resp.on('data', c => { data += c; });
+        resp.on('end', () => {
+          try { resolve({ status: resp.statusCode, body: JSON.parse(data) }); }
+          catch { resolve({ status: resp.statusCode, body: data }); }
+        });
+      });
+      reqH.on('error', reject);
+      reqH.on('timeout', () => { reqH.destroy(); reject(new Error('Request timeout')); });
+      reqH.end();
+    });
+
+    const resindex = (Number(page) - 1) * Number(page_size);
+    const apiUrl = `${baseUrl}/api/1.4/som/computers?filterby=${encodeURIComponent(filterby)}&resindex=${resindex}&count=${page_size}`;
+    const result = await fetchMe(apiUrl, cfg.api_key);
+
+    if (result.status !== 200) {
+      return res.status(502).json({ error: `ManageEngine API returned ${result.status}`, detail: result.body });
+    }
+
+    const raw = result.body;
+    const computers = raw?.computers_data?.computers || raw?.computers || [];
+    const total = raw?.message_response?.computers?.total ?? raw?.total ?? computers.length;
+
+    const mapped = computers.map(c => ({
+      computer_id:    c.computer_id    ?? c.computerid    ?? '',
+      computer_name:  c.computer_name  ?? c.computername  ?? '',
+      domain:         c.domain         ?? '',
+      ip_address:     c.ip_address     ?? c.ipaddress     ?? '',
+      os_name:        c.os_name        ?? c.osname        ?? '',
+      agent_version:  c.agent_version  ?? c.agentversion  ?? '',
+      agent_status:   c.agent_status   ?? c.agentstatus   ?? '',
+      last_contact:   c.last_contact_time ?? c.lastcontacttime ?? '',
+      managed_status: c.managed_status ?? '',
+      office_site:    c.office_site    ?? c.officesite    ?? '',
+    }));
+
+    const searchLower = String(search).toLowerCase();
+    const filtered = searchLower
+      ? mapped.filter(c => (c.computer_name + c.ip_address + c.domain + c.office_site).toLowerCase().includes(searchLower))
+      : mapped;
+
+    res.json({ computers: filtered, total: Number(total), page: Number(page), page_size: Number(page_size) });
+  } catch (e) {
+    console.error('ME agent status error:', e.message);
+    res.status(502).json({ error: e.message || 'Failed to fetch ManageEngine agent status' });
+  }
+});
+
 module.exports = router;

@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { deploymentAPI } from '../services/api';
 import {
   RefreshCw, Play, CheckCircle2, Save, Upload, Download, Trash2, Package, AlertTriangle,
+  Activity, Settings2, Search, Eye, EyeOff,
 } from 'lucide-react';
 
 const CONFIG_KEY = 'software_deploy_config_v1';
@@ -44,6 +45,7 @@ const OS_FILTERS = ['All', 'Windows', 'Linux', 'Unknown'];
 const PAGE_TABS = [
   { key: 'deploy', label: 'Deployment' },
   { key: 'verification', label: 'Installation Verification' },
+  { key: 'service-status', label: 'Service Status' },
 ];
 
 const toInt = (v, fallback = 0) => {
@@ -70,9 +72,52 @@ export default function SoftwareDeploymentPage() {
   const [verificationRows, setVerificationRows] = useState([]);
   const [duplicateWarning, setDuplicateWarning] = useState(null); // { ids, duplicates }
   const fileRef = useRef(null);
+
+  // Service Status (ManageEngine Endpoint Central)
+  const [meConfig, setMeConfig]         = useState({ server_url: '', api_key: '', enabled: false, has_key: false });
+  const [meConfigDirty, setMeConfigDirty] = useState({ server_url: '', api_key: '' });
+  const [meConfigLoaded, setMeConfigLoaded] = useState(false);
+  const [meSaving, setMeSaving]         = useState(false);
+  const [meShowKey, setMeShowKey]       = useState(false);
+  const [meAgents, setMeAgents]         = useState([]);
+  const [meTotal, setMeTotal]           = useState(0);
+  const [meLoading, setMeLoading]       = useState(false);
+  const [meSearch, setMeSearch]         = useState('');
+  const [meFilter, setMeFilter]         = useState('allcomputers');
+  const [mePage, setMePage]             = useState(1);
+  const ME_PAGE_SIZE = 200;
   const windowsProtocol = settings.windows_transport_protocol || settings.windows_mode || 'Auto';
 
   const appendLog = (line) => setLogs((prev) => [...prev.slice(-400), `[${ts()}] ${line}`]);
+
+  const loadMeConfig = useCallback(async () => {
+    try {
+      const r = await deploymentAPI.getMeConfig();
+      setMeConfig(r.data);
+      setMeConfigDirty({ server_url: r.data.server_url || '', api_key: '' });
+      setMeConfigLoaded(true);
+    } catch { toast.error('Failed to load ManageEngine config'); }
+  }, []);
+
+  const saveMeConfig = async () => {
+    setMeSaving(true);
+    try {
+      await deploymentAPI.saveMeConfig({ server_url: meConfigDirty.server_url, api_key: meConfigDirty.api_key || undefined, enabled: meConfig.enabled });
+      toast.success('ManageEngine config saved');
+      await loadMeConfig();
+    } catch (e) { toast.error(e?.response?.data?.error || 'Save failed'); }
+    finally { setMeSaving(false); }
+  };
+
+  const loadMeAgents = useCallback(async () => {
+    setMeLoading(true);
+    try {
+      const r = await deploymentAPI.getMeAgentStatus({ search: meSearch, filterby: meFilter, page: mePage, page_size: ME_PAGE_SIZE });
+      setMeAgents(r.data.computers || []);
+      setMeTotal(r.data.total || 0);
+    } catch (e) { toast.error(e?.response?.data?.error || 'Failed to fetch agent status'); }
+    finally { setMeLoading(false); }
+  }, [meSearch, meFilter, mePage]);
 
   const loadEndpoints = useCallback(async () => {
     setLoading(true);
@@ -97,6 +142,16 @@ export default function SoftwareDeploymentPage() {
       if (saved) setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(saved) });
     } catch {}
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'service-status' && !meConfigLoaded) loadMeConfig();
+  }, [activeTab, meConfigLoaded, loadMeConfig]);
+
+  useEffect(() => {
+    if (activeTab === 'service-status' && meAgents.length > 0) loadMeAgents();
+  // Only re-fetch when page changes (not on every filter change — user must click Fetch)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mePage]);
 
   const setField = (k, v) => setSettings((prev) => ({ ...prev, [k]: v }));
 
@@ -818,6 +873,151 @@ export default function SoftwareDeploymentPage() {
             Linux deployment and installation verification use SSH/SCP-compatible system tools on the backend host. Windows deployment currently runs through WinRM when PowerShell remoting is available on the backend host.
           </div>
         </>
+      )}
+
+      {activeTab === 'service-status' && (
+        <div className="space-y-4">
+          {/* ME Configuration card */}
+          <div className={`${glassCard} p-4 space-y-4`}>
+            <div className="flex items-center gap-2">
+              <Settings2 size={15} className="text-blue-600" />
+              <p className="font-semibold text-gray-800">ManageEngine Endpoint Central — API Configuration</p>
+            </div>
+            <p className="text-xs text-gray-500 -mt-2">
+              Connect to your ManageEngine Endpoint Central server using a read-only API key to pull live agent statuses.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Server URL</p>
+                <input
+                  className="input-field text-sm"
+                  placeholder="https://manage-engine.example.com:8383"
+                  value={meConfigDirty.server_url}
+                  onChange={e => setMeConfigDirty(p => ({ ...p, server_url: e.target.value }))}
+                />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-1">
+                  API Key {meConfig.has_key && <span className="text-green-600 ml-1 normal-case font-normal">(saved)</span>}
+                </p>
+                <div className="relative">
+                  <input
+                    className="input-field text-sm pr-9"
+                    type={meShowKey ? 'text' : 'password'}
+                    placeholder={meConfig.has_key ? '••••••••••••••• (leave blank to keep existing)' : 'Paste API key here'}
+                    value={meConfigDirty.api_key}
+                    onChange={e => setMeConfigDirty(p => ({ ...p, api_key: e.target.value }))}
+                  />
+                  <button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    onClick={() => setMeShowKey(v => !v)}>
+                    {meShowKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-gray-400">API requests are proxied through the backend server. The key is stored server-side only.</p>
+              <button type="button" className="btn-primary text-xs" onClick={saveMeConfig} disabled={meSaving}>
+                <Save size={13} /> {meSaving ? 'Saving…' : 'Save Config'}
+              </button>
+            </div>
+          </div>
+
+          {/* Fetch / Filter bar */}
+          <div className={`${glassCard} p-4`}>
+            <div className="flex flex-wrap gap-2 items-center">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  className="input-field text-sm pl-8"
+                  placeholder="Search by name, IP, domain, site…"
+                  value={meSearch}
+                  onChange={e => { setMeSearch(e.target.value); setMePage(1); }}
+                  onKeyDown={e => { if (e.key === 'Enter') loadMeAgents(); }}
+                />
+              </div>
+              <select className="input-field text-sm w-auto" value={meFilter} onChange={e => { setMeFilter(e.target.value); setMePage(1); }}>
+                <option value="allcomputers">All Computers</option>
+                <option value="onlinecomputers">Online</option>
+                <option value="offlinecomputers">Offline</option>
+                <option value="managedcomputers">Managed</option>
+                <option value="unmanagedcomputers">Unmanaged</option>
+              </select>
+              <button type="button" className="btn-primary text-xs" onClick={() => { setMePage(1); loadMeAgents(); }} disabled={meLoading || !meConfig.has_key}>
+                <Activity size={13} /> {meLoading ? 'Loading…' : 'Fetch Status'}
+              </button>
+              <button type="button" className="btn-secondary text-xs" onClick={loadMeAgents} disabled={meLoading || !meAgents.length}>
+                <RefreshCw size={13} /> Refresh
+              </button>
+            </div>
+            {!meConfig.has_key && (
+              <p className="text-xs text-amber-600 mt-2">Save a server URL and API key above before fetching agent statuses.</p>
+            )}
+          </div>
+
+          {/* Results table */}
+          <div className={`${glassCard} p-4 space-y-3`}>
+            <div className="flex items-center justify-between">
+              <p className="font-semibold text-gray-800">Agent Status</p>
+              <p className="text-xs text-gray-500">{meAgents.length} shown{meTotal > meAgents.length ? ` of ${meTotal} total` : ''}</p>
+            </div>
+            <div className="border border-gray-200 rounded overflow-auto max-h-[520px]">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
+                  <tr>
+                    <th className="table-th">Computer Name</th>
+                    <th className="table-th">IP Address</th>
+                    <th className="table-th">Domain</th>
+                    <th className="table-th">OS</th>
+                    <th className="table-th">Agent Version</th>
+                    <th className="table-th">Agent Status</th>
+                    <th className="table-th">Last Contact</th>
+                    <th className="table-th">Site</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {meLoading ? (
+                    <tr><td className="table-td text-gray-400 text-center" colSpan={8}>Loading agent statuses…</td></tr>
+                  ) : meAgents.length === 0 ? (
+                    <tr><td className="table-td text-gray-400 text-center" colSpan={8}>
+                      {meConfig.has_key ? 'Click "Fetch Status" to load agents' : 'Configure API settings above first'}
+                    </td></tr>
+                  ) : meAgents.map((a, i) => {
+                    const online = String(a.agent_status).toLowerCase().includes('online') || String(a.agent_status) === '1';
+                    const offline = String(a.agent_status).toLowerCase().includes('offline') || String(a.agent_status) === '2';
+                    return (
+                      <tr key={a.computer_id || i} className="hover:bg-gray-50">
+                        <td className="table-td font-medium text-gray-800">{a.computer_name || '—'}</td>
+                        <td className="table-td font-mono text-xs">{a.ip_address || '—'}</td>
+                        <td className="table-td text-xs">{a.domain || '—'}</td>
+                        <td className="table-td text-xs">{a.os_name || '—'}</td>
+                        <td className="table-td text-xs font-mono">{a.agent_version || '—'}</td>
+                        <td className="table-td">
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                            online  ? 'bg-green-100 text-green-700' :
+                            offline ? 'bg-red-100 text-red-600'     :
+                                      'bg-gray-100 text-gray-500'
+                          }`}>
+                            {a.agent_status || '—'}
+                          </span>
+                        </td>
+                        <td className="table-td text-xs text-gray-500">{a.last_contact || '—'}</td>
+                        <td className="table-td text-xs">{a.office_site || '—'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {meTotal > ME_PAGE_SIZE && (
+              <div className="flex items-center gap-3 justify-center text-xs">
+                <button className="btn-secondary text-xs" disabled={mePage <= 1} onClick={() => setMePage(p => p - 1)}>← Prev</button>
+                <span className="text-gray-500">Page {mePage} of {Math.ceil(meTotal / ME_PAGE_SIZE)}</span>
+                <button className="btn-secondary text-xs" disabled={mePage >= Math.ceil(meTotal / ME_PAGE_SIZE)} onClick={() => setMePage(p => p + 1)}>Next →</button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

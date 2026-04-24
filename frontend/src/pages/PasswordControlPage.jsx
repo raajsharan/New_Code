@@ -3,7 +3,7 @@ import { usersAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import Toggle from '../components/Toggle';
 import toast from 'react-hot-toast';
-import { Shield, Save } from 'lucide-react';
+import { Shield, Save, ChevronDown, ChevronRight } from 'lucide-react';
 
 // All pages with labels and grouping
 const PAGE_GROUPS = [
@@ -68,6 +68,14 @@ export default function PasswordControlPage() {
   const [loading, setLoading]     = useState(true);
   const [saving, setSaving]       = useState({});
   const [localPerms, setLocalPerms] = useState({});
+  const [expanded, setExpanded]   = useState(new Set());
+
+  const toggleExpand = (userId) =>
+    setExpanded(prev => {
+      const next = new Set(prev);
+      next.has(userId) ? next.delete(userId) : next.add(userId);
+      return next;
+    });
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -125,11 +133,18 @@ export default function PasswordControlPage() {
           const isAdmin   = user.role === 'admin';
           const isLocked  = isAdmin && !isSuperAdmin;
           const initials  = (user.first_name?.[0] || user.username[0]).toUpperCase();
+          const isOpen = expanded.has(user.id);
           return (
-            <div key={user.id} className="card">
-              {/* User header */}
-              <div className="flex items-center justify-between mb-5">
+            <div key={user.id} className="card !p-0 overflow-hidden">
+              {/* User header — always visible, click to expand */}
+              <div
+                className="flex items-center justify-between px-5 py-4 cursor-pointer select-none hover:bg-gray-50/60 transition-colors"
+                onClick={() => toggleExpand(user.id)}
+              >
                 <div className="flex items-center gap-3">
+                  <div className="text-gray-400">
+                    {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                  </div>
                   {user.profile_pic
                     ? <img src={user.profile_pic} alt="avatar" className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
                     : <div className="w-9 h-9 bg-blue-800 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">{initials}</div>}
@@ -141,44 +156,54 @@ export default function PasswordControlPage() {
                     <p className="text-xs text-gray-400">{user.email}</p>
                   </div>
                 </div>
-                {!isLocked && (
-                  <button onClick={() => saveUser(user.id)} disabled={saving[user.id]} className="btn-primary text-xs py-1.5">
-                    <Save size={13} /> {saving[user.id] ? 'Saving…' : 'Save'}
-                  </button>
-                )}
+                <div className="flex items-center gap-3" onClick={e => e.stopPropagation()}>
+                  {!isLocked && isOpen && (
+                    <button onClick={() => saveUser(user.id)} disabled={saving[user.id]} className="btn-primary text-xs py-1.5">
+                      <Save size={13} /> {saving[user.id] ? 'Saving…' : 'Save'}
+                    </button>
+                  )}
+                  {!isOpen && (
+                    <span className="text-xs text-gray-400">{isLocked ? 'Full access' : `${ALL_PAGES.length} permissions`}</span>
+                  )}
+                </div>
               </div>
 
-              {isLocked ? (
-                <div className="p-3 bg-gray-50 rounded-xl text-sm text-gray-500 italic flex items-center gap-2">
-                  <Shield size={14} className="text-gray-400" />
-                  Admin users have full access to all pages and passwords. Their permissions are managed at the system level.
-                </div>
-              ) : (
-                <>
-                  {/* Password visibility */}
-                  <div className="flex items-center gap-3 mb-5 p-3 bg-amber-50 rounded-xl border border-amber-100">
-                    <Toggle checked={perms.can_view_passwords || false} onChange={v => setUserPerm(user.id, 'can_view_passwords', v)} />
-                    <div>
-                      <p className="text-sm font-medium text-gray-700">Can view asset passwords</p>
-                      <p className="text-xs text-gray-500">Allow this user to reveal passwords in Asset Inventory &amp; Extended Inventory</p>
+              {/* Collapsible body */}
+              {isOpen && (
+                <div className="px-5 pb-5 border-t border-gray-100">
+                  {isLocked ? (
+                    <div className="mt-4 p-3 bg-gray-50 rounded-xl text-sm text-gray-500 italic flex items-center gap-2">
+                      <Shield size={14} className="text-gray-400" />
+                      Admin users have full access to all pages and passwords. Their permissions are managed at the system level.
                     </div>
-                  </div>
-
-                  {/* Page visibility by group */}
-                  {PAGE_GROUPS.map(({ group, pages }) => (
-                    <div key={group} className="mb-4 last:mb-0">
-                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">{group}</p>
-                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
-                        {pages.map(({ key, label }) => (
-                          <div key={key} className="flex items-center gap-2.5 p-2.5 bg-gray-50 rounded-lg border border-gray-100">
-                            <Toggle size="sm" checked={perms[key] !== false} onChange={v => setUserPerm(user.id, key, v)} />
-                            <span className="text-xs text-gray-700 leading-tight">{label}</span>
-                          </div>
-                        ))}
+                  ) : (
+                    <>
+                      {/* Password visibility */}
+                      <div className="flex items-center gap-3 mt-4 mb-5 p-3 bg-amber-50 rounded-xl border border-amber-100">
+                        <Toggle checked={perms.can_view_passwords || false} onChange={v => setUserPerm(user.id, 'can_view_passwords', v)} />
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">Can view asset passwords</p>
+                          <p className="text-xs text-gray-500">Allow this user to reveal passwords in Asset Inventory &amp; Extended Inventory</p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </>
+
+                      {/* Page visibility by group */}
+                      {PAGE_GROUPS.map(({ group, pages }) => (
+                        <div key={group} className="mb-4 last:mb-0">
+                          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">{group}</p>
+                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+                            {pages.map(({ key, label }) => (
+                              <div key={key} className="flex items-center gap-2.5 p-2.5 bg-gray-50 rounded-lg border border-gray-100">
+                                <Toggle size="sm" checked={perms[key] !== false} onChange={v => setUserPerm(user.id, key, v)} />
+                                <span className="text-xs text-gray-700 leading-tight">{label}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
               )}
             </div>
           );
