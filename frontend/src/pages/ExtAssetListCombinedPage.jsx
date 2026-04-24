@@ -457,7 +457,7 @@ function mergeExtColConfig(saved){
 // EXTENDED LIST tab  same columns as Asset Inventory
 // 
 function ExtListTab({ onEdit, refreshKey }) {
-  const { canWrite, user } = useAuth();
+  const { canWrite, user, canViewPage } = useAuth();
   const ROW_LIMIT_OPTIONS = [50, 80, 100, 150, 200];
   const canViewPw = user?.can_view_passwords || user?.role === 'admin' || user?.role === 'superadmin';
   const { configVersion } = useConfig();
@@ -473,6 +473,14 @@ function ExtListTab({ onEdit, refreshKey }) {
   const [colConfig, setColConfig]  = useState(EXT_COL_DEFAULTS);
   const [filters, setFilters]     = useState({search:'',location:'',department:'',server_status:'',asset_type:''});
   const { requestDelete } = useDeleteConfirm();
+  const [showBulkModal,  setShowBulkModal]  = useState(false);
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
+  const [bulkDryRunning, setBulkDryRunning] = useState(false);
+  const [bulkPatch, setBulkPatch] = useState({
+    assigned_user:'', department_id:'', server_status_id:'', patching_type_id:'',
+    patching_schedule_id:'', location_id:'', eol_status:'', status:'',
+  });
+  const [bulkJob, setBulkJob] = useState(null);
 
   const fetchMeta = useCallback(async () => {
     try {
@@ -504,6 +512,58 @@ function ExtListTab({ onEdit, refreshKey }) {
   const handleDelete=(item)=>{requestDelete(item.vm_name||item.asset_name||item.ip_address||'this item',async()=>{try{await extendedInventoryAPI.delete(item.id);toast.success('Deleted');fetchItems();}catch(err){toast.error(err.response?.data?.error||'Failed');}});};
 
   const handleExport=async()=>{setExporting(true);try{const r=await extendedInventoryAPI.exportCSV({...filters});const url=URL.createObjectURL(new Blob([r.data],{type:'text/csv'}));const a=document.createElement('a');a.href=url;a.download=`extended-inventory-${new Date().toISOString().split('T')[0]}.csv`;a.click();URL.revokeObjectURL(url);toast.success('Exported');}catch{toast.error('Export failed');}finally{setExporting(false);}};
+
+  const canBulkUpdate = canWrite && canViewPage('ext-asset-bulk-update');
+  const setBulkField = (k, v) => setBulkPatch(prev => ({ ...prev, [k]: v }));
+  const resetBulkPatch = () => setBulkPatch({ assigned_user:'', department_id:'', server_status_id:'', patching_type_id:'', patching_schedule_id:'', location_id:'', eol_status:'', status:'' });
+
+  const pollBulkJob = async (jobId) => {
+    for (let i = 0; i < 20; i++) {
+      const jr = await extendedInventoryAPI.getBulkJob(jobId);
+      const j = jr.data?.job;
+      if (!j) break;
+      setBulkJob(j);
+      if (j.status !== 'pending' && j.status !== 'running') return j;
+      await new Promise(resolve => setTimeout(resolve, 1200));
+    }
+    return null;
+  };
+
+  const handleBulkUpdate = async (dryRun = false) => {
+    const patch = {};
+    Object.entries(bulkPatch).forEach(([k, v]) => {
+      if (k === 'assigned_user') { if (String(v || '').trim()) patch[k] = String(v).trim(); return; }
+      if (v !== '' && v !== null && v !== undefined) patch[k] = v;
+    });
+    if (!Object.keys(patch).length) return toast.error('Select at least one field to update');
+    if (!dryRun && !confirm('Apply this bulk update to all records matching current filters?')) return;
+
+    const activeFilters = { ...filters };
+    Object.keys(activeFilters).forEach(k => { if (!activeFilters[k]) delete activeFilters[k]; });
+
+    if (dryRun) setBulkDryRunning(true); else setBulkSubmitting(true);
+    try {
+      const r = await extendedInventoryAPI.bulkUpdate({ filters: activeFilters, patch, dry_run: dryRun });
+      const initial = r.data || {};
+      if (initial.job_id) setBulkJob({ id:initial.job_id, status:initial.status, total_count:initial.matched_count, success_count:initial.success_count||0, failed_count:initial.failed_count||0 });
+
+      if (dryRun) {
+        toast.success(`Dry run complete: ${Number(initial.matched_count||0)} records would be targeted`);
+      } else {
+        const finalJob = initial.job_id ? await pollBulkJob(initial.job_id) : null;
+        const effective = finalJob || initial;
+        toast.success(`Bulk update finished: ${Number(effective.success_count||0)} updated${Number(effective.failed_count||0)?`, ${Number(effective.failed_count)} failed`:''}`);
+        setShowBulkModal(false);
+        resetBulkPatch();
+        fetchItems();
+      }
+    } catch (err) {
+      toast.error(err?.response?.data?.error || (dryRun ? 'Dry run failed' : 'Bulk update failed'));
+    } finally {
+      if (dryRun) setBulkDryRunning(false); else setBulkSubmitting(false);
+    }
+  };
+
   const totalPages=Math.ceil(total/limit);
   const COL_VM=160,COL_IP=120;
   const renderCustomVal=(item,cf)=>{const raw=item.custom_field_values?.[cf.field_key];if(isBlankLike(raw))return<span className="text-gray-400 text-xs">-</span>;if(cf.field_type==='toggle')return raw?<span className="text-green-600 text-xs">Yes</span>:<span className="text-gray-400 text-xs">No</span>;return<span className="text-xs text-gray-700">{displayText(raw)}</span>;};
@@ -524,10 +584,19 @@ function ExtListTab({ onEdit, refreshKey }) {
           </div>
         </div>
         <div className="flex gap-2">
+          {canBulkUpdate && <button onClick={()=>setShowBulkModal(true)} className="btn-secondary text-xs"><PlusCircle size={13}/> Bulk Update</button>}
           <button onClick={handleExport} disabled={exporting} className="btn-secondary text-xs"><Download size={13}/>{exporting?'Exporting...':'Export CSV'}</button>
           <button onClick={fetchItems} className="btn-secondary text-xs"><RefreshCw size={13}/> Refresh</button>
         </div>
       </div>
+      {bulkJob && (
+        <div className="mb-3 text-xs rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-blue-800">
+          Bulk job #{bulkJob.id}: <span className="font-semibold">{bulkJob.status}</span>
+          {bulkJob.total_count !== undefined && ` - total ${bulkJob.total_count}`}
+          {bulkJob.success_count !== undefined && ` - updated ${bulkJob.success_count}`}
+          {bulkJob.failed_count !== undefined && ` - failed ${bulkJob.failed_count}`}
+        </div>
+      )}
       <div className="card mb-4">
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
           <div className="relative xl:col-span-2"><Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/><input className="input-field pl-8" placeholder="VM name, hostname, IP, user" value={filters.search} onChange={e=>setFilter('search',e.target.value)}/></div>
@@ -537,6 +606,34 @@ function ExtListTab({ onEdit, refreshKey }) {
           <select className="input-field" value={filters.asset_type} onChange={e=>setFilter('asset_type',e.target.value)}><option value="">All Types</option>{(dropdowns.asset_types||[]).map(t=><option key={t.id} value={t.name}>{t.name}</option>)}</select>
         </div>
       </div>
+      {showBulkModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={()=>!bulkSubmitting&&setShowBulkModal(false)}>
+          <div className="bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-2xl p-5" onClick={e=>e.stopPropagation()}>
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800">Bulk Update Ext. Assets</h3>
+                <p className="text-xs text-gray-500 mt-1">Applies to records matching current filters.</p>
+              </div>
+              <button type="button" className="text-gray-400 hover:text-gray-600 text-xl leading-none" onClick={()=>!bulkSubmitting&&setShowBulkModal(false)}>x</button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div><label className="block text-xs text-gray-500 mb-1">Assigned User</label><input className="input-field" value={bulkPatch.assigned_user} onChange={e=>setBulkField('assigned_user',e.target.value)} placeholder="ops.team"/></div>
+              <div><label className="block text-xs text-gray-500 mb-1">Department</label><select className="input-field" value={bulkPatch.department_id} onChange={e=>setBulkField('department_id',e.target.value)}><option value="">No change</option>{(dropdowns.departments||[]).map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></div>
+              <div><label className="block text-xs text-gray-500 mb-1">Server Status</label><select className="input-field" value={bulkPatch.server_status_id} onChange={e=>setBulkField('server_status_id',e.target.value)}><option value="">No change</option>{(dropdowns.server_status||[]).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+              <div><label className="block text-xs text-gray-500 mb-1">Patching Type</label><select className="input-field" value={bulkPatch.patching_type_id} onChange={e=>setBulkField('patching_type_id',e.target.value)}><option value="">No change</option>{(dropdowns.patching_types||[]).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+              <div><label className="block text-xs text-gray-500 mb-1">Patching Schedule</label><select className="input-field" value={bulkPatch.patching_schedule_id} onChange={e=>setBulkField('patching_schedule_id',e.target.value)}><option value="">No change</option>{(dropdowns.patching_schedules||[]).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+              <div><label className="block text-xs text-gray-500 mb-1">Location</label><select className="input-field" value={bulkPatch.location_id} onChange={e=>setBulkField('location_id',e.target.value)}><option value="">No change</option>{(dropdowns.locations||[]).map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</select></div>
+              <div><label className="block text-xs text-gray-500 mb-1">EOL Status</label><select className="input-field" value={bulkPatch.eol_status} onChange={e=>setBulkField('eol_status',e.target.value)}><option value="">No change</option><option value="InSupport">In Support</option><option value="EOL">EOL</option><option value="Decom">Decommissioned</option><option value="Not Applicable">Not Applicable</option></select></div>
+              <div><label className="block text-xs text-gray-500 mb-1">Record Status</label><select className="input-field" value={bulkPatch.status} onChange={e=>setBulkField('status',e.target.value)}><option value="">No change</option><option value="Active">Active</option><option value="Inactive">Inactive</option><option value="Decommissioned">Decommissioned</option><option value="Maintenance">Maintenance</option></select></div>
+            </div>
+            <div className="flex justify-end gap-2 mt-5">
+              <button type="button" className="btn-secondary text-xs" onClick={()=>{resetBulkPatch();setShowBulkModal(false);}} disabled={bulkSubmitting||bulkDryRunning}>Cancel</button>
+              <button type="button" className="btn-secondary text-xs" onClick={()=>handleBulkUpdate(true)} disabled={bulkSubmitting||bulkDryRunning}>{bulkDryRunning?'Running Dry Run...':'Dry Run'}</button>
+              <button type="button" className="btn-primary text-xs" onClick={()=>handleBulkUpdate(false)} disabled={bulkSubmitting||bulkDryRunning}>{bulkSubmitting?'Applying...':'Apply Bulk Update'}</button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="overflow-auto max-h-[62vh]">
           <table className="w-full text-sm" style={{borderCollapse:'separate',borderSpacing:0}}>

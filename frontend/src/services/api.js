@@ -196,6 +196,8 @@ export const extendedInventoryAPI = {
   createCustomField: (d) => api.post('/extended-inventory/custom-fields/add', d),
   updateCustomField: (id, d) => api.put(`/extended-inventory/custom-fields/${id}`, d),
   deleteCustomField: (id) => api.delete(`/extended-inventory/custom-fields/${id}`),
+  bulkUpdate: (d) => api.post('/extended-inventory/bulk-update', d),
+  getBulkJob: (jobId) => api.get(`/extended-inventory/bulk-update/${jobId}`),
 };
 
 export const reportAPI = {

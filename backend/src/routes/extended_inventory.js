@@ -885,5 +885,185 @@ router.delete('/custom-fields/:id', auth, requireAdmin, async (req,res) => {
   catch { res.status(500).json({ error:'Server error' }); }
 });
 
+// ─── BULK UPDATE ──────────────────────────────────────────────────────────────
+
+const EXT_BULK_PATCH_FIELDS  = new Set(['assigned_user','department_id','server_status_id','patching_type_id','patching_schedule_id','location_id','eol_status','status']);
+const EXT_BULK_INT_FIELDS    = new Set(['department_id','server_status_id','patching_type_id','patching_schedule_id','location_id']);
+const EXT_BULK_EOL_VALUES    = new Set(['InSupport','EOL','Decom','Not Applicable']);
+const EXT_BULK_STATUS_VALUES = new Set(['Active','Inactive','Decommissioned','Maintenance']);
+
+async function canUseExtBulkUpdate(req) {
+  if (req.user?.role === 'superadmin') return true;
+  const r = await pool.query(
+    `SELECT is_visible FROM user_page_permissions WHERE user_id=$1 AND page_key='ext-asset-bulk-update' LIMIT 1`,
+    [req.user.id]
+  );
+  if (!r.rows.length) return false;
+  return !!r.rows[0].is_visible;
+}
+
+function normalizeExtBulkPatch(patch = {}) {
+  const out = {};
+  for (const [k, v] of Object.entries(patch)) {
+    if (!EXT_BULK_PATCH_FIELDS.has(k) || v === undefined) continue;
+    if (k === 'assigned_user') { out[k] = String(v || '').trim(); continue; }
+    if (k === 'eol_status') {
+      if (v === null || v === '') { out[k] = 'InSupport'; }
+      else if (!EXT_BULK_EOL_VALUES.has(String(v))) { throw new Error(`Invalid eol_status: ${v}`); }
+      else { out[k] = String(v); }
+      continue;
+    }
+    if (k === 'status') {
+      if (v && !EXT_BULK_STATUS_VALUES.has(String(v))) { throw new Error(`Invalid status: ${v}`); }
+      out[k] = String(v || '');
+      continue;
+    }
+    if (EXT_BULK_INT_FIELDS.has(k)) {
+      if (v === null || v === '') { out[k] = null; }
+      else { const n = parseInt(v, 10); if (Number.isNaN(n)) throw new Error(`Invalid numeric value for ${k}`); out[k] = n; }
+      continue;
+    }
+    out[k] = v;
+  }
+  return out;
+}
+
+async function buildExtFilterWhere(filters = {}) {
+  const conds = [], params = [];
+  let i = 1;
+  if (filters.search) {
+    conds.push(`(asset_name ILIKE $${i} OR ip_address ILIKE $${i} OR os_hostname ILIKE $${i} OR assigned_user ILIKE $${i})`);
+    params.push(`%${filters.search}%`); i++;
+  }
+  if (filters.department) {
+    const dr = await pool.query('SELECT id FROM departments WHERE name ILIKE $1', [filters.department]);
+    if (dr.rows.length) { conds.push(`department_id=$${i++}`); params.push(dr.rows[0].id); }
+  }
+  if (filters.location) {
+    const lr = await pool.query('SELECT id FROM locations WHERE name ILIKE $1', [filters.location]);
+    if (lr.rows.length) { conds.push(`location_id=$${i++}`); params.push(lr.rows[0].id); }
+  }
+  if (filters.server_status) {
+    const sr = await pool.query('SELECT id FROM server_status WHERE name ILIKE $1', [filters.server_status]);
+    if (sr.rows.length) { conds.push(`server_status_id=$${i++}`); params.push(sr.rows[0].id); }
+  }
+  if (filters.asset_type) {
+    const ar = await pool.query('SELECT id FROM asset_types WHERE name ILIKE $1', [filters.asset_type]);
+    if (ar.rows.length) { conds.push(`asset_type_id=$${i++}`); params.push(ar.rows[0].id); }
+  }
+  return { where: conds.length ? 'WHERE ' + conds.join(' AND ') : '', params };
+}
+
+// POST /api/extended-inventory/bulk-update
+router.post('/bulk-update', auth, requireWrite, async (req, res) => {
+  try {
+    const allowed = await canUseExtBulkUpdate(req);
+    if (!allowed) return res.status(403).json({ error: 'Access denied for bulk update' });
+
+    const filters   = req.body?.filters || {};
+    const patchRaw  = req.body?.patch   || {};
+    const dryRun    = req.body?.dry_run === true;
+    const patch     = normalizeExtBulkPatch(patchRaw);
+    const patchEntries = Object.entries(patch).filter(([k]) => EXT_BULK_PATCH_FIELDS.has(k));
+    if (!patchEntries.length) return res.status(400).json({ error: 'patch must include at least one allowed field' });
+
+    const { where, params } = await buildExtFilterWhere(filters);
+    const matched = await extPool.query(`SELECT id FROM items ${where} ORDER BY id ASC`, params);
+    const ids     = matched.rows.map(r => String(r.id));
+
+    const now  = new Date();
+    const jobR = await pool.query(
+      `INSERT INTO bulk_jobs (entity_type, filters_json, patch_json, status, total_count,
+         requested_by_user_id, requested_by_username, started_at, finished_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, status, total_count, created_at`,
+      ['ext_item', JSON.stringify(filters), JSON.stringify(Object.fromEntries(patchEntries)),
+       dryRun ? 'completed' : 'running', ids.length,
+       req.user.id, req.user.username || '', now, dryRun ? now : null]
+    );
+    const job = jobR.rows[0];
+
+    for (const id of ids) {
+      await pool.query(
+        `INSERT INTO bulk_job_items (job_id, entity_id, status) VALUES ($1,$2,$3)`,
+        [job.id, id, dryRun ? 'skipped' : 'pending']
+      );
+    }
+
+    let successCount = 0, failedCount = 0;
+
+    if (!dryRun && ids.length > 0) {
+      const patchObj = Object.fromEntries(patchEntries);
+      const sets = [], setParams = [];
+      let si = 1;
+      for (const [k, v] of Object.entries(patchObj)) { sets.push(`${k}=$${si++}`); setParams.push(v); }
+
+      for (const id of ids) {
+        try {
+          const before = await extPool.query('SELECT * FROM items WHERE id=$1', [id]);
+          if (!before.rows.length) {
+            failedCount++;
+            await pool.query(`UPDATE bulk_job_items SET status='failed', error_message=$1, updated_at=NOW() WHERE job_id=$2 AND entity_id=$3`, ['Record not found', job.id, id]);
+            continue;
+          }
+          await extPool.query(`UPDATE items SET ${sets.join(', ')}, updated_at=NOW() WHERE id=$${si}`, [...setParams, parseInt(id, 10)]);
+          const after = await extPool.query('SELECT * FROM items WHERE id=$1', [id]);
+          await pool.query(
+            `UPDATE bulk_job_items SET status='updated', error_message=NULL, before_json=$1, after_json=$2, updated_at=NOW() WHERE job_id=$3 AND entity_id=$4`,
+            [JSON.stringify(before.rows[0] || null), JSON.stringify(after.rows[0] || null), job.id, id]
+          );
+          successCount++;
+          try {
+            await writeAuditLog({ entityType:'ext_item', entityId:id, action:'bulk-update',
+              beforeState:before.rows[0]||null, afterState:after.rows[0]||null, user:req.user, req });
+          } catch (ae) { console.warn(`Audit log failed (ext bulk-update ${id}):`, ae.message); }
+        } catch (itemErr) {
+          failedCount++;
+          await pool.query(`UPDATE bulk_job_items SET status='failed', error_message=$1, updated_at=NOW() WHERE job_id=$2 AND entity_id=$3`, [itemErr.message||'Update failed', job.id, id]);
+        }
+      }
+    }
+
+    if (dryRun) {
+      await pool.query(`UPDATE bulk_jobs SET status='completed', success_count=0, failed_count=0, finished_at=NOW() WHERE id=$1`, [job.id]);
+    } else {
+      const fs = failedCount > 0 && successCount === 0 ? 'failed' : 'completed';
+      await pool.query(`UPDATE bulk_jobs SET status=$1, success_count=$2, failed_count=$3, finished_at=NOW() WHERE id=$4`, [fs, successCount, failedCount, job.id]);
+    }
+
+    res.status(202).json({
+      job_id: job.id,
+      status: dryRun ? 'completed' : (failedCount > 0 && successCount === 0 ? 'failed' : 'completed'),
+      matched_count: ids.length,
+      success_count: successCount,
+      failed_count: failedCount,
+    });
+  } catch (e) {
+    if (String(e.message || '').startsWith('Invalid')) return res.status(400).json({ error: e.message });
+    console.error(e);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/extended-inventory/bulk-update/:jobId
+router.get('/bulk-update/:jobId', auth, async (req, res) => {
+  try {
+    const allowed = await canUseExtBulkUpdate(req);
+    if (!allowed) return res.status(403).json({ error: 'Access denied for bulk update' });
+    const job = await pool.query(
+      `SELECT id, entity_type, status, total_count, success_count, failed_count, error_message,
+              created_at, started_at, finished_at, requested_by_user_id, requested_by_username
+       FROM bulk_jobs WHERE id=$1 AND entity_type='ext_item'`,
+      [req.params.jobId]
+    );
+    if (!job.rows.length) return res.status(404).json({ error: 'Bulk job not found' });
+    const items = await pool.query(
+      `SELECT entity_id, status, error_message, before_json, after_json, updated_at
+       FROM bulk_job_items WHERE job_id=$1 ORDER BY id ASC LIMIT 500`,
+      [req.params.jobId]
+    );
+    res.json({ job: job.rows[0], items: items.rows });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
+});
+
 
 module.exports = router;
