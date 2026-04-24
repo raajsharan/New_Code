@@ -988,9 +988,9 @@ router.get('/me-agent-status', auth, requireAdmin, async (req, res) => {
     const pageNum = Number(page);
     const pgSize  = Number(page_size);
 
-    // ME EC has two pagination styles — try both
+    // ME EC: API key goes in Authorization header ONLY — authtoken as query param is rejected (IAM0028)
     const mkUrl = (path, paramStyle = 'resindex', fb = '') => {
-      const qs = new URLSearchParams({ authtoken: apiKey });
+      const qs = new URLSearchParams();
       if (paramStyle === 'resindex') {
         qs.set('resindex', String((pageNum - 1) * pgSize));
         qs.set('count', String(pgSize));
