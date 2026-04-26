@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import {
   ArrowLeft, Edit2, Save, X, Server, Building2, Shield,
-  RefreshCw, CheckCircle, Info, MapPin, History, Layers,
+  RefreshCw, MapPin, History, Layers,
   HardDrive, Key, Zap, ExternalLink, Eye, EyeOff,
 } from 'lucide-react';
 
@@ -185,13 +185,6 @@ export default function BeijingAssetDetailPage() {
               <code className="text-sm font-mono text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded">
                 {asset.ip_address}
               </code>
-              {asset.is_migrated
-                ? <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-medium">
-                    <CheckCircle size={10} /> Migrated
-                  </span>
-                : <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-medium">
-                    <Info size={10} /> Pending
-                  </span>}
             </div>
           </div>
         </div>
@@ -207,7 +200,7 @@ export default function BeijingAssetDetailPage() {
           >
             <History size={13} /> Audit Trail
           </button>
-          {isAdmin && !asset.is_migrated && !editing && (
+          {isAdmin && !editing && (
             <button onClick={startEdit} className="btn-primary text-xs">
               <Edit2 size={13} /> Edit Asset
             </button>
@@ -413,13 +406,6 @@ export default function BeijingAssetDetailPage() {
           <InfoRow label="Import Batch"  value={asset.import_batch_id} mono />
           <InfoRow label="Submitted By"  value={asset.submitted_by} />
           <InfoRow label="Created"       value={asset.created_at ? new Date(asset.created_at).toLocaleString() : null} />
-          {asset.is_migrated && (
-            <>
-              <InfoRow label="Migrated By"      value={asset.migrated_by} />
-              <InfoRow label="Migrated At"      value={asset.migrated_at ? new Date(asset.migrated_at).toLocaleString() : null} />
-              <InfoRow label="Migration Note"   value={asset.migration_comment} />
-            </>
-          )}
         </Section>
 
         {/* Additional Remarks — full width */}

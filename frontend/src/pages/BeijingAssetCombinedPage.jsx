@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 import {
   PlusCircle, RotateCcw, Download, List, Plus,
   Search, Edit2, Trash2, ChevronLeft, ChevronRight,
-  RefreshCw, CheckCircle, AlertTriangle, Info, ArrowRight, Eye, History,
+  RefreshCw, CheckCircle, AlertTriangle, Eye, History,
   EyeOff, Zap, HardDrive, Key, Tag,
 } from 'lucide-react';
 
@@ -56,12 +56,6 @@ function SectionTitle({ title }) {
       <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{title}</p>
     </div>
   );
-}
-
-function MigratedBadge({ migrated }) {
-  return migrated
-    ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"><CheckCircle size={10} />Migrated</span>
-    : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"><Info size={10} />Pending</span>;
 }
 
 // ─── ADD / EDIT TAB ───────────────────────────────────────────────────────────
@@ -381,8 +375,6 @@ const BEIJING_COMBINED_COL_DEFAULTS = [
   { key: 'me_installed',       label: 'ME Agent',       visible: false },
   { key: 'tenable_installed',  label: 'Tenable',        visible: false },
   { key: 'serial_number',      label: 'Serial No.',     visible: false },
-  { key: 'status',             label: 'Migrated',       visible: true  },
-  { key: 'migrated_by',        label: 'Migrated By',    visible: true  },
 ];
 
 function mergeCombinedColConfig(saved) {
@@ -411,7 +403,6 @@ function BeijingListTab({ onEdit, refreshKey, initialBatchFilter = '' }) {
   const [location,     setLocation]     = useState('');
   const [assetType,    setAssetType]    = useState('');
   const [serverStatus, setServerStatus] = useState('');
-  const [migrating,    setMigrating]    = useState(null);
   const [dropdowns,    setDropdowns]    = useState({});
   const [batchFilter,  setBatchFilter]  = useState(initialBatchFilter);
   const [selected,     setSelected]     = useState(new Set());
@@ -483,25 +474,6 @@ function BeijingListTab({ onEdit, refreshKey, initialBatchFilter = '' }) {
         fetchAssets();
       } catch (err) { toast.error(err.response?.data?.error || 'Delete failed'); }
     });
-  };
-
-  const handleMigrate = async (asset) => {
-    // eslint-disable-next-line no-alert
-    const comment = window.prompt(
-      `Migrate "${asset.vm_name || asset.ip_address}" to Asset List?\n\nOptional migration note:`
-    );
-    if (comment === null) return;
-    setMigrating(asset.id);
-    try {
-      const r = await beijingAssetsAPI.migrate([asset.id], comment);
-      if (r.data.migrated?.length) {
-        toast.success('Asset migrated to Asset List');
-        fetchAssets();
-      } else {
-        toast.error(r.data.failed?.[0]?.reason || 'Migration failed');
-      }
-    } catch (err) { toast.error(err.response?.data?.error || 'Migration failed'); }
-    finally { setMigrating(null); }
   };
 
   const handleExport = async () => {
@@ -656,7 +628,7 @@ function BeijingListTab({ onEdit, refreshKey, initialBatchFilter = '' }) {
                   </td>
                 </tr>
               ) : assets.map(a => (
-                <tr key={a.id} className={`hover:bg-blue-50/20 dark:hover:bg-blue-900/10 ${a.is_migrated ? 'opacity-60' : ''} ${selected.has(a.id) ? 'bg-blue-50' : ''}`}>
+                <tr key={a.id} className={`hover:bg-blue-50/20 dark:hover:bg-blue-900/10 ${selected.has(a.id) ? 'bg-blue-50' : ''}`}>
                   {isAdmin && (
                     <td className="table-td bg-white dark:bg-slate-900 w-8 px-2" style={{ position: 'sticky', left: 0 }} onClick={e => e.stopPropagation()}>
                       <input type="checkbox" checked={selected.has(a.id)} onChange={() => toggleSelect(a.id)} className="accent-blue-600" />
@@ -693,23 +665,12 @@ function BeijingListTab({ onEdit, refreshKey, initialBatchFilter = '' }) {
                       case 'me_installed':      return <td key={col.key} className="table-td text-xs whitespace-nowrap">{a.me_installed_status ? <span className="text-green-700 font-medium">✓ Installed</span> : <span className="text-gray-400">—</span>}</td>;
                       case 'tenable_installed': return <td key={col.key} className="table-td text-xs whitespace-nowrap">{a.tenable_installed_status ? <span className="text-green-700 font-medium">✓ Installed</span> : <span className="text-gray-400">—</span>}</td>;
                       case 'serial_number':     return <td key={col.key} className="table-td font-mono text-xs text-gray-500 dark:text-slate-500">{a.serial_number || '—'}</td>;
-                      case 'status':            return <td key={col.key} className="table-td whitespace-nowrap"><MigratedBadge migrated={a.is_migrated} /></td>;
-                      case 'migrated_by':       return (
-                        <td key={col.key} className="table-td text-xs text-gray-500 dark:text-slate-500">
-                          {a.is_migrated ? (
-                            <div>
-                              <p className="font-medium text-gray-700 dark:text-slate-300">{a.migrated_by}</p>
-                              <p className="text-gray-400">{a.migrated_at ? new Date(a.migrated_at).toLocaleDateString() : ''}</p>
-                            </div>
-                          ) : '—'}
-                        </td>
-                      );
                       default: return <td key={col.key} className="table-td text-gray-400">—</td>;
                     }
                   })}
                   <td className="table-td">
                     <div className="flex gap-1 justify-center">
-                      {isAdmin && !a.is_migrated && (
+                      {isAdmin && (
                         <>
                           <button
                             onClick={() => onEdit(a)}
@@ -717,14 +678,6 @@ function BeijingListTab({ onEdit, refreshKey, initialBatchFilter = '' }) {
                             title="Edit"
                           >
                             <Edit2 size={13} />
-                          </button>
-                          <button
-                            onClick={() => handleMigrate(a)}
-                            disabled={migrating === a.id}
-                            className="p-1.5 text-violet-600 hover:bg-violet-100 dark:hover:bg-violet-900/30 rounded transition-colors disabled:opacity-40"
-                            title="Migrate to Asset List"
-                          >
-                            {migrating === a.id ? <RefreshCw size={13} className="animate-spin" /> : <ArrowRight size={13} />}
                           </button>
                           <button
                             onClick={() => handleDelete(a)}
