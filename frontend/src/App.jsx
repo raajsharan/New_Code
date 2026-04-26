@@ -44,6 +44,7 @@ import TenableImportPage from './pages/TenableImportPage';
 import BeijingAssetCombinedPage from './pages/BeijingAssetCombinedPage';
 import BeijingAssetDetailPage from './pages/BeijingAssetDetailPage';
 import BeijingAssetFieldsPage from './pages/BeijingAssetFieldsPage';
+import DeletedListPage from './pages/DeletedListPage';
 
 function FullPageLoader({ label = 'Loading' }) {
   return (
@@ -129,6 +130,7 @@ function AppRoutes() {
         <Route path="beijing-asset-list" element={<Guard pageKey="beijing-asset-list"><BeijingAssetCombinedPage /></Guard>} />
         <Route path="beijing-asset/:id" element={<Guard pageKey="beijing-asset-list"><BeijingAssetDetailPage /></Guard>} />
         <Route path="beijing-asset-fields" element={<Guard adminOnly pageKey="beijing-asset-fields"><BeijingAssetFieldsPage /></Guard>} />
+        <Route path="deleted-list"         element={<Guard adminOnly pageKey="deleted-list"><DeletedListPage /></Guard>} />
         <Route path="assets/:id"                     element={<Guard pageKey="asset-list"><AssetDetailPage /></Guard>} />
         <Route path="ext-assets/:id"                 element={<Guard pageKey="extended-inventory"><ExtAssetDetailPage /></Guard>} />
       </Route>

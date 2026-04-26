@@ -28,6 +28,7 @@ app.use('/api/vmware',             vmwareRoutes);
 app.use('/api/vm',                 require('./routes/vm'));
 app.use('/api/tenable',            require('./routes/tenable'));
 app.use('/api/beijing-assets',     require('./routes/beijing_assets'));
+app.use('/api/deleted-items',      require('./routes/deleted_items'));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));

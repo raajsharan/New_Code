@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const pool = require('../config/database');
 const { auth, requireWrite, requireAdmin } = require('../middleware/auth');
+const { saveToDeletedItems } = require('../services/deletedItems');
 
 const PS_SELECT = `
   SELECT ps.*,
@@ -112,6 +113,9 @@ router.put('/:id', auth, requireWrite, async (req, res) => {
 // DELETE /api/physical-assets/:id
 router.delete('/:id', auth, requireWrite, async (req, res) => {
   try {
+    const { rows } = await pool.query('SELECT * FROM physical_servers WHERE id=$1', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    await saveToDeletedItems('physical_assets', rows[0].id, rows[0], req.user?.username);
     await pool.query('DELETE FROM physical_servers WHERE id=$1', [req.params.id]);
     res.json({ message: 'Deleted' });
   } catch (e) { res.status(500).json({ error: 'Server error' }); }

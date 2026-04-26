@@ -5,6 +5,7 @@ const { parse } = require('csv-parse/sync');
 const XLSX = require('xlsx');
 const { auth, requireWrite } = require('../middleware/auth');
 const { writeAuditLog } = require('../services/audit');
+const { saveToDeletedItems } = require('../services/deletedItems');
 const { writeImportAuditReport } = require('../services/importAudit');
 let encryptPassword;
 let decryptPassword;
@@ -671,6 +672,7 @@ router.delete('/:id', auth, requireWrite, async (req, res) => {
     const before = await pool.query(`${ASSET_SELECT} WHERE a.id=$1`, [req.params.id]);
     if (!before.rows.length) return res.status(404).json({ error: 'Not found' });
 
+    await saveToDeletedItems('assets', before.rows[0].id, before.rows[0], req.user?.username);
     const r = await pool.query('DELETE FROM assets WHERE id=$1 RETURNING id', [req.params.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
 

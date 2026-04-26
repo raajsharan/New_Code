@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { beijingAssetsAPI } from '../services/api';
+import { beijingAssetsAPI, dropdownsAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useDeleteConfirm } from '../context/DeleteConfirmContext';
 import toast from 'react-hot-toast';
@@ -232,26 +232,41 @@ function BeijingListTab({ onEdit, refreshKey }) {
   const { requestDelete } = useDeleteConfirm();
   const navigate = useNavigate();
 
-  const [assets,    setAssets]    = useState([]);
-  const [total,     setTotal]     = useState(0);
-  const [page,      setPage]      = useState(1);
-  const [limit,     setLimit]     = useState(50);
-  const [loading,   setLoading]   = useState(true);
-  const [exporting, setExporting] = useState(false);
-  const [search,    setSearch]    = useState('');
-  const [migrating, setMigrating] = useState(null);
+  const [assets,       setAssets]       = useState([]);
+  const [total,        setTotal]        = useState(0);
+  const [page,         setPage]         = useState(1);
+  const [limit,        setLimit]        = useState(50);
+  const [loading,      setLoading]      = useState(true);
+  const [exporting,    setExporting]    = useState(false);
+  const [search,       setSearch]       = useState('');
+  const [department,   setDepartment]   = useState('');
+  const [location,     setLocation]     = useState('');
+  const [assetType,    setAssetType]    = useState('');
+  const [serverStatus, setServerStatus] = useState('');
+  const [migrating,    setMigrating]    = useState(null);
+  const [dropdowns,    setDropdowns]    = useState({});
+
+  useEffect(() => {
+    dropdownsAPI.getAll().then(r => setDropdowns(r.data)).catch(() => {});
+  }, []);
 
   const fetchAssets = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await beijingAssetsAPI.getAll({ page, limit, search });
+      const res = await beijingAssetsAPI.getAll({
+        page, limit, search,
+        department:    department    || undefined,
+        location:      location      || undefined,
+        asset_type:    assetType     || undefined,
+        server_status: serverStatus  || undefined,
+      });
       setAssets(res.data.assets);
       setTotal(res.data.total);
     } catch { toast.error('Failed to load Beijing Asset List'); }
     finally { setLoading(false); }
-  }, [page, limit, search]);
+  }, [page, limit, search, department, location, assetType, serverStatus]);
 
-  useEffect(() => { setPage(1); }, [search]); // eslint-disable-line
+  useEffect(() => { setPage(1); }, [search, department, location, assetType, serverStatus]); // eslint-disable-line
   useEffect(() => { fetchAssets(); }, [fetchAssets, refreshKey]);
 
   const handleDelete = (a) => {
@@ -327,7 +342,7 @@ function BeijingListTab({ onEdit, refreshKey }) {
       </div>
 
       {/* Filters */}
-      <div className="card mb-4">
+      <div className="card mb-4 space-y-3">
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1 max-w-sm">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -338,6 +353,32 @@ function BeijingListTab({ onEdit, refreshKey }) {
               onChange={e => setSearch(e.target.value)}
             />
           </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <select className="input-field py-1 text-xs" value={department} onChange={e => setDepartment(e.target.value)}>
+            <option value="">All Departments</option>
+            {(dropdowns.departments || []).map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+          </select>
+          <select className="input-field py-1 text-xs" value={location} onChange={e => setLocation(e.target.value)}>
+            <option value="">All Locations</option>
+            {(dropdowns.locations || []).map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
+          </select>
+          <select className="input-field py-1 text-xs" value={assetType} onChange={e => setAssetType(e.target.value)}>
+            <option value="">All Asset Types</option>
+            {(dropdowns.asset_types || []).map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+          </select>
+          <select className="input-field py-1 text-xs" value={serverStatus} onChange={e => setServerStatus(e.target.value)}>
+            <option value="">All Server Status</option>
+            {(dropdowns.server_status || []).map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+          </select>
+          {(department || location || assetType || serverStatus) && (
+            <button
+              onClick={() => { setDepartment(''); setLocation(''); setAssetType(''); setServerStatus(''); }}
+              className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 border border-red-200 rounded-lg transition-colors"
+            >
+              Clear
+            </button>
+          )}
         </div>
       </div>
 
@@ -517,7 +558,7 @@ export default function BeijingAssetCombinedPage() {
       <div className="mb-5">
         <h1 className="text-2xl font-bold text-gray-800 dark:text-slate-100">Beijing Asset List</h1>
         <p className="text-sm text-gray-500 dark:text-slate-400 mt-0.5">
-          Add and manage assets imported from Beijing Excel files
+          Standalone Beijing asset inventory — add, import, and manage assets independently
         </p>
       </div>
 

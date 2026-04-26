@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { beijingAssetsAPI } from '../services/api';
+import { beijingAssetsAPI, dropdownsAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import {
@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 
 const STATUS_LABELS = { '': 'All', pending: 'Pending', migrated: 'Migrated' };
+const ROW_LIMIT_OPTS = [15, 30, 50, 80, 100];
 
 function Badge({ migrated }) {
   return migrated
@@ -34,20 +35,34 @@ export default function BeijingAssetListPage() {
   const { isAdmin } = useAuth();
   const navigate = useNavigate();
 
-  const [assets,   setAssets]   = useState([]);
-  const [total,    setTotal]    = useState(0);
-  const [page,     setPage]     = useState(1);
-  const [loading,  setLoading]  = useState(false);
-  const [search,   setSearch]   = useState('');
-  const [status,   setStatus]   = useState('');
-  const [exporting, setExporting] = useState(false);
+  const [assets,       setAssets]       = useState([]);
+  const [total,        setTotal]        = useState(0);
+  const [page,         setPage]         = useState(1);
+  const [limit,        setLimit]        = useState(15);
+  const [loading,      setLoading]      = useState(false);
+  const [search,       setSearch]       = useState('');
+  const [status,       setStatus]       = useState('');
+  const [department,   setDepartment]   = useState('');
+  const [location,     setLocation]     = useState('');
+  const [assetType,    setAssetType]    = useState('');
+  const [serverStatus, setServerStatus] = useState('');
+  const [exporting,    setExporting]    = useState(false);
+  const [dropdowns,    setDropdowns]    = useState({});
 
-  const LIMIT = 15;
+  useEffect(() => {
+    dropdownsAPI.getAll().then(r => setDropdowns(r.data)).catch(() => {});
+  }, []);
 
   const fetchAssets = useCallback(async (pg = page) => {
     setLoading(true);
     try {
-      const res = await beijingAssetsAPI.getAll({ page: pg, limit: LIMIT, search, status });
+      const res = await beijingAssetsAPI.getAll({
+        page: pg, limit, search, status,
+        department:    department    || undefined,
+        location:      location      || undefined,
+        asset_type:    assetType     || undefined,
+        server_status: serverStatus  || undefined,
+      });
       setAssets(res.data.assets);
       setTotal(res.data.total);
     } catch {
@@ -55,10 +70,10 @@ export default function BeijingAssetListPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, status]);
+  }, [page, limit, search, status, department, location, assetType, serverStatus]);
 
-  useEffect(() => { fetchAssets(1); setPage(1); }, [search, status]); // eslint-disable-line
-  useEffect(() => { fetchAssets(page); }, [page]);                      // eslint-disable-line
+  useEffect(() => { fetchAssets(1); setPage(1); }, [search, status, limit, department, location, assetType, serverStatus]); // eslint-disable-line
+  useEffect(() => { fetchAssets(page); }, [page]); // eslint-disable-line
 
   async function handleDelete(id) {
     if (!window.confirm('Delete this asset from Beijing Asset List?')) return;
@@ -74,7 +89,13 @@ export default function BeijingAssetListPage() {
   async function handleExport() {
     setExporting(true);
     try {
-      const res = await beijingAssetsAPI.exportCSV({ status });
+      const res = await beijingAssetsAPI.exportCSV({
+        status,
+        department:    department    || undefined,
+        location:      location      || undefined,
+        asset_type:    assetType     || undefined,
+        server_status: serverStatus  || undefined,
+      });
       const url = URL.createObjectURL(new Blob([res.data]));
       const a = document.createElement('a'); a.href = url;
       a.download = `beijing-assets-${Date.now()}.csv`; a.click();
@@ -86,6 +107,8 @@ export default function BeijingAssetListPage() {
     }
   }
 
+  const hasActiveFilters = !!(department || location || assetType || serverStatus || status);
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -93,10 +116,20 @@ export default function BeijingAssetListPage() {
         <div>
           <h1 className="text-xl font-bold text-gray-900">Beijing Asset List</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Assets imported from Excel that are not present in Asset List or Ext. Asset List
+            Standalone Beijing asset inventory — add, import, and manage assets independently
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-gray-500">Rows</label>
+            <select
+              className="py-1 px-2 text-xs border border-gray-300 rounded-lg"
+              value={limit}
+              onChange={e => { setLimit(parseInt(e.target.value, 10)); setPage(1); }}
+            >
+              {ROW_LIMIT_OPTS.map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
           <button onClick={handleExport} disabled={exporting}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-300 text-gray-700 text-sm hover:bg-gray-50 disabled:opacity-50">
             <Download size={15} />
@@ -111,25 +144,65 @@ export default function BeijingAssetListPage() {
       </div>
 
       {/* Filters */}
-      <div className="glass-panel px-4 py-3 flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search IP, name, hostname, dept…"
-            className="w-full pl-8 pr-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+      <div className="glass-panel px-4 py-3 space-y-3">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1 max-w-sm">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Search IP, name, hostname, dept…"
+              className="w-full pl-8 pr-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Filter size={14} className="text-gray-400" />
+            {Object.entries(STATUS_LABELS).map(([val, lbl]) => (
+              <button key={val} onClick={() => setStatus(val)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  status === val ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}>
+                {lbl}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Filter size={14} className="text-gray-400" />
-          {Object.entries(STATUS_LABELS).map(([val, lbl]) => (
-            <button key={val} onClick={() => setStatus(val)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                status === val ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}>
-              {lbl}
+        <div className="flex flex-wrap gap-2">
+          <select
+            className="py-1.5 px-3 text-xs border border-gray-300 rounded-lg"
+            value={department} onChange={e => setDepartment(e.target.value)}
+          >
+            <option value="">All Departments</option>
+            {(dropdowns.departments || []).map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+          </select>
+          <select
+            className="py-1.5 px-3 text-xs border border-gray-300 rounded-lg"
+            value={location} onChange={e => setLocation(e.target.value)}
+          >
+            <option value="">All Locations</option>
+            {(dropdowns.locations || []).map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
+          </select>
+          <select
+            className="py-1.5 px-3 text-xs border border-gray-300 rounded-lg"
+            value={assetType} onChange={e => setAssetType(e.target.value)}
+          >
+            <option value="">All Asset Types</option>
+            {(dropdowns.asset_types || []).map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+          </select>
+          <select
+            className="py-1.5 px-3 text-xs border border-gray-300 rounded-lg"
+            value={serverStatus} onChange={e => setServerStatus(e.target.value)}
+          >
+            <option value="">All Server Status</option>
+            {(dropdowns.server_status || []).map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+          </select>
+          {hasActiveFilters && (
+            <button
+              onClick={() => { setStatus(''); setDepartment(''); setLocation(''); setAssetType(''); setServerStatus(''); }}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 border border-red-200 transition-colors"
+            >
+              Clear Filters
             </button>
-          ))}
+          )}
         </div>
       </div>
 
@@ -161,7 +234,7 @@ export default function BeijingAssetListPage() {
               ) : assets.length === 0 ? (
                 <tr><td colSpan={isAdmin ? 12 : 11} className="py-16 text-center text-gray-400">
                   <AlertTriangle size={20} className="mx-auto mb-2 text-amber-400" />
-                  No assets found. Import an Excel file via Beijing Asset Import to get started.
+                  No assets found. Adjust filters or import via Beijing Asset Import.
                 </td></tr>
               ) : assets.map(a => (
                 <tr
@@ -206,7 +279,7 @@ export default function BeijingAssetListPage() {
           </table>
         </div>
         <div className="px-4 py-3 border-t border-gray-100 flex justify-end">
-          <Pagination page={page} total={total} limit={LIMIT} onChange={setPage} />
+          <Pagination page={page} total={total} limit={limit} onChange={setPage} />
         </div>
       </div>
     </div>

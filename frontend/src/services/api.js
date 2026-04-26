@@ -315,6 +315,12 @@ export const beijingAssetsAPI = {
   deleteCustomField:  (id)        => api.delete(`/beijing-assets/custom-fields/${id}`),
 };
 
+export const deletedItemsAPI = {
+  getAll:    (params) => api.get('/deleted-items', { params }),
+  hardDelete:(id)     => api.delete(`/deleted-items/${id}`),
+  restore:   (id)     => api.post(`/deleted-items/restore/${id}`),
+};
+
 export const tenableAPI = {
   import: (file) => {
     const fd = new FormData();

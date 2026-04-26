@@ -6,6 +6,7 @@ const { parse } = require('csv-parse/sync');
 const XLSX = require('xlsx');
 const { auth, requireWrite, requireAdmin } = require('../middleware/auth');
 const { writeAuditLog } = require('../services/audit');
+const { saveToDeletedItems } = require('../services/deletedItems');
 const { writeImportAuditReport } = require('../services/importAudit');
 let encryptPassword;
 let decryptPassword;
@@ -308,9 +309,14 @@ router.put('/:id', auth, requireWrite, async (req,res) => {
   }
 });
 
-router.delete('/:id', auth, requireWrite, async (req,res) => {
-  try { await extPool.query('DELETE FROM items WHERE id=$1',[req.params.id]); res.json({ message:'Deleted' }); }
-  catch { res.status(500).json({ error:'Server error' }); }
+router.delete('/:id', auth, requireWrite, async (req, res) => {
+  try {
+    const { rows } = await extPool.query('SELECT * FROM items WHERE id=$1', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    await saveToDeletedItems('extended_inventory', rows[0].id, rows[0], req.user?.username);
+    await extPool.query('DELETE FROM items WHERE id=$1', [req.params.id]);
+    res.json({ message: 'Deleted' });
+  } catch { res.status(500).json({ error: 'Server error' }); }
 });
 
 // POST /:id/transfer

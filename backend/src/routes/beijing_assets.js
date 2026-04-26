@@ -1,6 +1,8 @@
 const router = require('express').Router();
 const pool = require('../config/database');
 const { auth, requireAdmin } = require('../middleware/auth');
+const { writeAuditLog } = require('../services/audit');
+const { saveToDeletedItems } = require('../services/deletedItems');
 const multer = require('multer');
 const XLSX = require('xlsx');
 const { parse: csvParse } = require('csv-parse/sync');
@@ -73,6 +75,10 @@ router.get('/', auth, async (req, res) => {
     }
     if (status === 'migrated') where.push('is_migrated = TRUE');
     else if (status === 'pending') where.push('is_migrated = FALSE');
+    if (req.query.department)    { where.push(`department = $${idx++}`);    params.push(req.query.department); }
+    if (req.query.location)      { where.push(`location = $${idx++}`);      params.push(req.query.location); }
+    if (req.query.asset_type)    { where.push(`asset_type = $${idx++}`);    params.push(req.query.asset_type); }
+    if (req.query.server_status) { where.push(`server_status = $${idx++}`); params.push(req.query.server_status); }
 
     const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
@@ -87,7 +93,7 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-// POST /api/beijing-assets/import
+// POST /api/beijing-assets/import  (standalone — only checks within beijing_assets)
 router.post('/import', auth, requireAdmin, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
@@ -95,19 +101,12 @@ router.post('/import', auth, requireAdmin, upload.single('file'), async (req, re
     const rows = parseFile(req.file.buffer, req.file.originalname);
     if (!rows.length) return res.status(400).json({ error: 'File is empty or could not be parsed' });
 
-    const headerMap   = buildHeaderMap(Object.keys(rows[0]));
-    const batchId     = crypto.randomUUID();
+    const headerMap    = buildHeaderMap(Object.keys(rows[0]));
+    const batchId      = crypto.randomUUID();
     const importSource = req.file.originalname;
 
-    // Collect all existing IPs from Asset List + Ext. Asset List
-    const [assetsRes, extRes, beijingRes] = await Promise.all([
-      pool.query('SELECT LOWER(TRIM(ip_address)) AS ip FROM assets WHERE ip_address IS NOT NULL AND ip_address <> \'\''),
-      pool.query('SELECT LOWER(TRIM(ip_address)) AS ip FROM extended_inventory WHERE ip_address IS NOT NULL AND ip_address <> \'\''),
-      pool.query('SELECT LOWER(TRIM(ip_address)) AS ip FROM beijing_assets WHERE ip_address IS NOT NULL AND ip_address <> \'\''),
-    ]);
-
-    const existingIPs = new Set([...assetsRes.rows.map(r => r.ip), ...extRes.rows.map(r => r.ip)]);
-    const beijingIPs  = new Set(beijingRes.rows.map(r => r.ip));
+    const beijingRes = await pool.query("SELECT LOWER(TRIM(ip_address)) AS ip FROM beijing_assets WHERE ip_address IS NOT NULL AND ip_address <> ''");
+    const beijingIPs = new Set(beijingRes.rows.map(r => r.ip));
 
     let added = 0;
     const skipped          = [];
@@ -123,15 +122,7 @@ router.post('/import', auth, requireAdmin, upload.single('file'), async (req, re
       if (!ip) { skipped.push({ ip: '(empty)', reason: 'Missing IP address' }); continue; }
 
       const ipNorm = ip.toLowerCase();
-
-      if (existingIPs.has(ipNorm)) {
-        skipped.push({ ip, reason: 'Already exists in Asset List or Ext. Asset List' });
-        continue;
-      }
-      if (beijingIPs.has(ipNorm)) {
-        alreadyInBeijing.push(ip);
-        continue;
-      }
+      if (beijingIPs.has(ipNorm)) { alreadyInBeijing.push(ip); continue; }
 
       await pool.query(
         `INSERT INTO beijing_assets
@@ -142,25 +133,24 @@ router.post('/import', auth, requireAdmin, upload.single('file'), async (req, re
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
         [
           ip,
-          mapped.vm_name         || null,
-          mapped.os_hostname     || null,
-          mapped.asset_type      || null,
-          mapped.os_type         || null,
-          mapped.os_version      || null,
-          mapped.assigned_user   || null,
-          mapped.department      || null,
-          mapped.location        || null,
-          mapped.business_purpose|| null,
-          mapped.server_status   || null,
-          mapped.serial_number   || null,
-          mapped.eol_status      || null,
-          mapped.asset_tag       || null,
+          mapped.vm_name          || null,
+          mapped.os_hostname      || null,
+          mapped.asset_type       || null,
+          mapped.os_type          || null,
+          mapped.os_version       || null,
+          mapped.assigned_user    || null,
+          mapped.department       || null,
+          mapped.location         || null,
+          mapped.business_purpose || null,
+          mapped.server_status    || null,
+          mapped.serial_number    || null,
+          mapped.eol_status       || null,
+          mapped.asset_tag        || null,
           mapped.additional_remarks || null,
           importSource, batchId,
           req.user?.username || null,
         ]
       );
-
       added++;
       beijingIPs.add(ipNorm);
     }
@@ -250,13 +240,19 @@ router.post('/migrate', auth, requireAdmin, async (req, res) => {
 // GET /api/beijing-assets/export/csv
 router.get('/export/csv', auth, async (req, res) => {
   try {
-    const { status = '' } = req.query;
-    let q = 'SELECT * FROM beijing_assets';
-    if (status === 'migrated') q += ' WHERE is_migrated = TRUE';
-    else if (status === 'pending') q += ' WHERE is_migrated = FALSE';
-    q += ' ORDER BY created_at DESC';
+    const { status = '', department = '', location = '', asset_type = '', server_status = '' } = req.query;
+    const params = [];
+    const where  = [];
+    let idx = 1;
+    if (status === 'migrated') where.push('is_migrated = TRUE');
+    else if (status === 'pending') where.push('is_migrated = FALSE');
+    if (department)    { where.push(`department = $${idx++}`);    params.push(department); }
+    if (location)      { where.push(`location = $${idx++}`);      params.push(location); }
+    if (asset_type)    { where.push(`asset_type = $${idx++}`);    params.push(asset_type); }
+    if (server_status) { where.push(`server_status = $${idx++}`); params.push(server_status); }
+    const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
-    const { rows } = await pool.query(q);
+    const { rows } = await pool.query(`SELECT * FROM beijing_assets ${clause} ORDER BY created_at DESC`, params);
     const cols = ['id','ip_address','vm_name','os_hostname','asset_type','os_type','os_version','assigned_user','department','location','server_status','serial_number','eol_status','asset_tag','additional_remarks','is_migrated','migrated_at','migrated_by','migration_comment','import_source','submitted_by','created_at'];
     const csv = [
       cols.join(','),
@@ -284,7 +280,7 @@ router.get('/template', auth, (req, res) => {
   res.send(csv);
 });
 
-// POST /api/beijing-assets/preview
+// POST /api/beijing-assets/preview  (standalone — only checks within beijing_assets)
 router.post('/preview', auth, requireAdmin, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
@@ -292,17 +288,12 @@ router.post('/preview', auth, requireAdmin, upload.single('file'), async (req, r
     if (!rows.length) return res.status(400).json({ error: 'File is empty or could not be parsed' });
 
     const headers = Object.keys(rows[0]);
-    const headerMap = buildHeaderMap(headers);
-    const mappedFields = [...new Set(Object.values(headerMap))];
+    const headerMap      = buildHeaderMap(headers);
+    const mappedFields   = [...new Set(Object.values(headerMap))];
     const unmappedColumns = headers.filter(h => !headerMap[h]);
 
-    const [assetsRes, extRes, beijingRes] = await Promise.all([
-      pool.query("SELECT LOWER(TRIM(ip_address)) AS ip FROM assets WHERE ip_address IS NOT NULL AND ip_address != ''"),
-      pool.query("SELECT LOWER(TRIM(ip_address)) AS ip FROM extended_inventory WHERE ip_address IS NOT NULL AND ip_address != ''"),
-      pool.query("SELECT LOWER(TRIM(ip_address)) AS ip FROM beijing_assets WHERE ip_address IS NOT NULL AND ip_address != ''"),
-    ]);
-    const existingIPs = new Set([...assetsRes.rows.map(r => r.ip), ...extRes.rows.map(r => r.ip)]);
-    const beijingIPs  = new Set(beijingRes.rows.map(r => r.ip));
+    const beijingRes = await pool.query("SELECT LOWER(TRIM(ip_address)) AS ip FROM beijing_assets WHERE ip_address IS NOT NULL AND ip_address != ''");
+    const beijingIPs = new Set(beijingRes.rows.map(r => r.ip));
 
     const previewRows = rows.map((row, idx) => {
       const mapped = {};
@@ -313,8 +304,6 @@ router.post('/preview', auth, requireAdmin, upload.single('file'), async (req, r
       const errors = [];
       if (!ip) {
         errors.push('Missing IP address');
-      } else if (existingIPs.has(ip.toLowerCase())) {
-        errors.push('Already exists in Asset List or Ext. Asset List');
       } else if (beijingIPs.has(ip.toLowerCase())) {
         errors.push('Already in Beijing Asset List');
       }
@@ -335,20 +324,15 @@ router.post('/preview', auth, requireAdmin, upload.single('file'), async (req, r
   }
 });
 
-// POST /api/beijing-assets/import-selected
+// POST /api/beijing-assets/import-selected  (standalone — only checks within beijing_assets)
 router.post('/import-selected', auth, requireAdmin, async (req, res) => {
   try {
     const { rows } = req.body;
     if (!Array.isArray(rows) || !rows.length) return res.status(400).json({ error: 'No rows provided' });
 
-    const batchId = crypto.randomUUID();
-    const [assetsRes, extRes, beijingRes] = await Promise.all([
-      pool.query("SELECT LOWER(TRIM(ip_address)) AS ip FROM assets WHERE ip_address IS NOT NULL AND ip_address != ''"),
-      pool.query("SELECT LOWER(TRIM(ip_address)) AS ip FROM extended_inventory WHERE ip_address IS NOT NULL AND ip_address != ''"),
-      pool.query("SELECT LOWER(TRIM(ip_address)) AS ip FROM beijing_assets WHERE ip_address IS NOT NULL AND ip_address != ''"),
-    ]);
-    const existingIPs = new Set([...assetsRes.rows.map(r => r.ip), ...extRes.rows.map(r => r.ip)]);
-    const beijingIPs  = new Set(beijingRes.rows.map(r => r.ip));
+    const batchId    = crypto.randomUUID();
+    const beijingRes = await pool.query("SELECT LOWER(TRIM(ip_address)) AS ip FROM beijing_assets WHERE ip_address IS NOT NULL AND ip_address != ''");
+    const beijingIPs = new Set(beijingRes.rows.map(r => r.ip));
 
     let added = 0;
     const skipped = [];
@@ -358,7 +342,6 @@ router.post('/import-selected', auth, requireAdmin, async (req, res) => {
       const ip = (mapped.ip_address || '').trim();
       if (!ip) { skipped.push({ row: row.row_number, reason: 'Missing IP' }); continue; }
       const ipNorm = ip.toLowerCase();
-      if (existingIPs.has(ipNorm)) { skipped.push({ row: row.row_number, ip, reason: 'Already in Asset/Ext List' }); continue; }
       if (beijingIPs.has(ipNorm)) { skipped.push({ row: row.row_number, ip, reason: 'Already in Beijing List' }); continue; }
 
       await pool.query(
@@ -398,19 +381,13 @@ router.post('/import-selected', auth, requireAdmin, async (req, res) => {
   }
 });
 
-// POST /api/beijing-assets  (create a single asset manually)
+// POST /api/beijing-assets  (create a single asset manually — only checks within beijing_assets)
 router.post('/', auth, requireAdmin, async (req, res) => {
   try {
     const ip = (req.body.ip_address || '').trim();
     if (!ip) return res.status(400).json({ error: 'IP address is required' });
 
-    const [aRes, eRes, bRes] = await Promise.all([
-      pool.query("SELECT 1 FROM assets WHERE LOWER(TRIM(ip_address)) = LOWER($1) LIMIT 1", [ip]),
-      pool.query("SELECT 1 FROM extended_inventory WHERE LOWER(TRIM(ip_address)) = LOWER($1) LIMIT 1", [ip]),
-      pool.query("SELECT 1 FROM beijing_assets WHERE LOWER(TRIM(ip_address)) = LOWER($1) LIMIT 1", [ip]),
-    ]);
-    if (aRes.rows.length) return res.status(400).json({ error: 'IP already exists in Asset List', duplicate: true });
-    if (eRes.rows.length) return res.status(400).json({ error: 'IP already exists in Ext. Asset List', duplicate: true });
+    const bRes = await pool.query("SELECT 1 FROM beijing_assets WHERE LOWER(TRIM(ip_address)) = LOWER($1) LIMIT 1", [ip]);
     if (bRes.rows.length) return res.status(400).json({ error: 'IP already exists in Beijing Asset List', duplicate: true });
 
     const FIELDS = ['vm_name','os_hostname','asset_type','os_type','os_version','assigned_user',
@@ -432,26 +409,19 @@ router.post('/', auth, requireAdmin, async (req, res) => {
   }
 });
 
-// GET /api/beijing-assets/check-duplicate
+// GET /api/beijing-assets/check-duplicate  (only checks within beijing_assets)
 router.get('/check-duplicate', auth, async (req, res) => {
   try {
-    const ip = (req.query.ip || '').trim();
+    const ip        = (req.query.ip || '').trim();
     const excludeId = req.query.exclude_id ? parseInt(req.query.exclude_id) : null;
     if (!ip) return res.json({ duplicate: false });
 
-    const [aRes, eRes, bRes] = await Promise.all([
-      pool.query("SELECT 1 FROM assets WHERE LOWER(TRIM(ip_address)) = LOWER($1) LIMIT 1", [ip]),
-      pool.query("SELECT 1 FROM extended_inventory WHERE LOWER(TRIM(ip_address)) = LOWER($1) LIMIT 1", [ip]),
-      pool.query(
-        excludeId
-          ? "SELECT 1 FROM beijing_assets WHERE LOWER(TRIM(ip_address)) = LOWER($1) AND id <> $2 LIMIT 1"
-          : "SELECT 1 FROM beijing_assets WHERE LOWER(TRIM(ip_address)) = LOWER($1) LIMIT 1",
-        excludeId ? [ip, excludeId] : [ip]
-      ),
-    ]);
-
-    if (aRes.rows.length) return res.json({ duplicate: true, message: 'IP already exists in Asset List' });
-    if (eRes.rows.length) return res.json({ duplicate: true, message: 'IP already exists in Ext. Asset List' });
+    const bRes = await pool.query(
+      excludeId
+        ? "SELECT 1 FROM beijing_assets WHERE LOWER(TRIM(ip_address)) = LOWER($1) AND id <> $2 LIMIT 1"
+        : "SELECT 1 FROM beijing_assets WHERE LOWER(TRIM(ip_address)) = LOWER($1) LIMIT 1",
+      excludeId ? [ip, excludeId] : [ip]
+    );
     if (bRes.rows.length) return res.json({ duplicate: true, message: 'IP already exists in Beijing Asset List' });
     res.json({ duplicate: false });
   } catch (e) {
@@ -462,8 +432,13 @@ router.get('/check-duplicate', auth, async (req, res) => {
 // DELETE /api/beijing-assets/:id
 router.delete('/:id', auth, requireAdmin, async (req, res) => {
   try {
-    const { rowCount } = await pool.query('DELETE FROM beijing_assets WHERE id = $1', [req.params.id]);
-    if (!rowCount) return res.status(404).json({ error: 'Not found' });
+    const { rows } = await pool.query('SELECT * FROM beijing_assets WHERE id = $1', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    await saveToDeletedItems('beijing_assets', rows[0].id, rows[0], req.user?.username);
+    await pool.query('DELETE FROM beijing_assets WHERE id = $1', [req.params.id]);
+    try {
+      await writeAuditLog({ entityType: 'beijing_asset', entityId: req.params.id, action: 'delete', beforeState: rows[0], afterState: null, user: req.user, req });
+    } catch (ae) { console.warn('Audit log failed (beijing delete):', ae.message); }
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -512,28 +487,16 @@ router.put('/:id', auth, requireAdmin, async (req, res) => {
 });
 
 // ─── CUSTOM FIELDS ────────────────────────────────────────────────────────────
-// Requires: beijing_custom_fields table + custom_field_values JSONB on beijing_assets
-// Run once on server:
-//   CREATE TABLE IF NOT EXISTS beijing_custom_fields (
-//     id SERIAL PRIMARY KEY, field_key VARCHAR(100) NOT NULL UNIQUE,
-//     field_label VARCHAR(200) NOT NULL, field_type VARCHAR(50) NOT NULL DEFAULT 'text',
-//     is_active BOOLEAN DEFAULT TRUE, display_order INTEGER DEFAULT 0,
-//     created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW()
-//   );
-//   ALTER TABLE beijing_assets ADD COLUMN IF NOT EXISTS custom_field_values JSONB DEFAULT '{}';
-
-// GET /api/beijing-assets/custom-fields
 router.get('/custom-fields', auth, async (req, res) => {
   try {
     const r = await pool.query('SELECT * FROM beijing_custom_fields ORDER BY display_order, id');
     res.json(r.rows);
   } catch (e) {
-    if (e.code === '42P01') return res.json([]); // table doesn't exist yet
+    if (e.code === '42P01') return res.json([]);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
-// POST /api/beijing-assets/custom-fields/add
 router.post('/custom-fields/add', auth, requireAdmin, async (req, res) => {
   try {
     const { field_label, field_type = 'text', display_order = 0 } = req.body || {};
@@ -551,7 +514,6 @@ router.post('/custom-fields/add', auth, requireAdmin, async (req, res) => {
   }
 });
 
-// PUT /api/beijing-assets/custom-fields/:id
 router.put('/custom-fields/:id', auth, requireAdmin, async (req, res) => {
   try {
     const { field_label, field_type, is_active, display_order } = req.body || {};
@@ -568,7 +530,6 @@ router.put('/custom-fields/:id', auth, requireAdmin, async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'Server error' }); }
 });
 
-// DELETE /api/beijing-assets/custom-fields/:id
 router.delete('/custom-fields/:id', auth, requireAdmin, async (req, res) => {
   try {
     await pool.query('DELETE FROM beijing_custom_fields WHERE id=$1', [req.params.id]);

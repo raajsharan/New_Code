@@ -137,7 +137,7 @@ export default function BeijingImportPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-800 dark:text-slate-100">Beijing Asset Import</h1>
           <p className="text-sm text-gray-500 dark:text-slate-400">
-            Upload Excel / CSV, verify rows, then import to Beijing Asset List.
+            Upload Excel / CSV, verify rows, then import to the standalone Beijing Asset List.
           </p>
         </div>
       </div>
@@ -169,7 +169,7 @@ export default function BeijingImportPage() {
         </div>
 
         <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-3 py-2 text-xs text-blue-800 dark:text-blue-300">
-          Flexible column matching — headers are matched by name, spacing, and common aliases. IPs already in Asset List or Ext. Asset List are skipped automatically.
+          Flexible column matching — headers are matched by name, spacing, and common aliases. Duplicate IPs within the Beijing Asset List are automatically detected. Beijing imports are standalone and do not cross-check with Asset List or Ext. Asset List.
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
