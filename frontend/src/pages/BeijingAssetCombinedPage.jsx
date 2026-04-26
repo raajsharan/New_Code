@@ -8,6 +8,7 @@ import {
   PlusCircle, RotateCcw, Download, List, Plus,
   Search, Edit2, Trash2, ChevronLeft, ChevronRight,
   RefreshCw, CheckCircle, AlertTriangle, Info, ArrowRight, Eye, History,
+  EyeOff, Zap, HardDrive, Key, Tag,
 } from 'lucide-react';
 
 const BEIJING_INIT = {
@@ -15,10 +16,28 @@ const BEIJING_INIT = {
   os_type: '', os_version: '', assigned_user: '', department: '',
   location: '', business_purpose: '', server_status: '',
   serial_number: '', eol_status: '', asset_tag: '', additional_remarks: '',
+  idrac_enabled: false, idrac_ip: '', oem_status: '',
+  hosted_ip: '', asset_username: '', asset_password: '',
+  me_installed_status: false, tenable_installed_status: false,
+  patching_type: '', server_patch_type: '', patching_schedule: '',
+  custom_field_values: {},
 };
 
-const EOL_OPTIONS     = ['', 'InSupport', 'EOL', 'Decom', 'Not Applicable'];
-const SVRSTATUS_OPTS  = ['', 'Alive', 'Powered Off', 'Not Alive'];
+const EOL_OPTIONS = ['', 'InSupport', 'EOL', 'Decom', 'Not Applicable'];
+
+function Toggle({ checked, onChange, disabled }) {
+  return (
+    <button
+      type="button"
+      onClick={() => !disabled && onChange(!checked)}
+      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+        checked ? 'bg-blue-600' : 'bg-gray-300 dark:bg-slate-600'
+      } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+    >
+      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${checked ? 'translate-x-5' : 'translate-x-1'}`} />
+    </button>
+  );
+}
 
 function Field({ label, required, children }) {
   return (
@@ -48,18 +67,27 @@ function MigratedBadge({ migrated }) {
 // ─── ADD / EDIT TAB ───────────────────────────────────────────────────────────
 function AddBeijingTab({ onSaved, editAsset, onClearEdit }) {
   const { isAdmin } = useAuth();
-  const [form, setForm]       = useState(BEIJING_INIT);
-  const [loading, setLoading] = useState(false);
+  const [form, setForm]         = useState(BEIJING_INIT);
+  const [loading, setLoading]   = useState(false);
   const [dupState, setDupState] = useState({ ip: null });
   const [checking, setChecking] = useState({ ip: false });
+  const [showPw, setShowPw]     = useState(false);
+  const [dropdowns, setDropdowns]       = useState({});
+  const [customFields, setCustomFields] = useState([]);
   const ipTimer = useRef(null);
 
   useEffect(() => {
-    if (editAsset) setForm({ ...BEIJING_INIT, ...editAsset });
+    dropdownsAPI.getAll().then(r => setDropdowns(r.data)).catch(() => {});
+    beijingAssetsAPI.getCustomFields().then(r => setCustomFields(r.data || [])).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (editAsset) setForm({ ...BEIJING_INIT, ...editAsset, custom_field_values: editAsset.custom_field_values || {} });
     else           setForm(BEIJING_INIT);
   }, [editAsset]);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const setCustom = (k, v) => setForm(p => ({ ...p, custom_field_values: { ...p.custom_field_values, [k]: v } }));
 
   const checkIP = async (ip) => {
     if (!ip?.trim()) { setDupState({ ip: null }); return; }
@@ -79,8 +107,8 @@ function AddBeijingTab({ onSaved, editAsset, onClearEdit }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (dupState.ip)                  { toast.error('Fix duplicate IP'); return; }
-    if (!form.ip_address.trim())      { toast.error('IP address is required'); return; }
+    if (dupState.ip)             { toast.error('Fix duplicate IP'); return; }
+    if (!form.ip_address.trim()) { toast.error('IP address is required'); return; }
     setLoading(true);
     try {
       if (editAsset) {
@@ -99,6 +127,8 @@ function AddBeijingTab({ onSaved, editAsset, onClearEdit }) {
       else toast.error(msg);
     } finally { setLoading(false); }
   };
+
+  const activeCustomFields = customFields.filter(cf => cf.is_active !== false);
 
   return (
     <div>
@@ -139,7 +169,7 @@ function AddBeijingTab({ onSaved, editAsset, onClearEdit }) {
             </Field>
             <Field label="IP Address" required>
               <input
-                className={`input-field ${dupState.ip ? 'border-red-400' : dupState.ip === false ? 'border-green-400' : ''}`}
+                className={`input-field font-mono ${dupState.ip ? 'border-red-400' : dupState.ip === false ? 'border-green-400' : ''}`}
                 value={form.ip_address}
                 onChange={e => handleIPChange(e.target.value)}
                 placeholder="192.168.1.10"
@@ -155,13 +185,24 @@ function AddBeijingTab({ onSaved, editAsset, onClearEdit }) {
               )}
             </Field>
             <Field label="Asset Type">
-              <input className="input-field" value={form.asset_type} onChange={e => set('asset_type', e.target.value)} placeholder="VM / Physical / Container" />
+              <select className="input-field" value={form.asset_type} onChange={e => set('asset_type', e.target.value)}>
+                <option value="">Select...</option>
+                {(dropdowns.asset_types || []).map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+              </select>
             </Field>
             <Field label="OS Type">
-              <input className="input-field" value={form.os_type} onChange={e => set('os_type', e.target.value)} placeholder="Windows / Linux / ESXi" />
+              <select className="input-field" value={form.os_type} onChange={e => { set('os_type', e.target.value); set('os_version', ''); }}>
+                <option value="">Select...</option>
+                {(dropdowns.os_types || []).map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+              </select>
             </Field>
             <Field label="OS Version">
-              <input className="input-field" value={form.os_version} onChange={e => set('os_version', e.target.value)} placeholder="Server 2022 / RHEL 9" />
+              <select className="input-field" value={form.os_version} onChange={e => set('os_version', e.target.value)}>
+                <option value="">{form.os_type ? 'Select version...' : 'Select OS Type first'}</option>
+                {(dropdowns.os_versions || [])
+                  .filter(v => !form.os_type || (dropdowns.os_types || []).find(t => t.name === form.os_type)?.id === v.os_type_id)
+                  .map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
+              </select>
             </Field>
 
             <SectionTitle title="Ownership" />
@@ -169,10 +210,16 @@ function AddBeijingTab({ onSaved, editAsset, onClearEdit }) {
               <input className="input-field" value={form.assigned_user} onChange={e => set('assigned_user', e.target.value)} placeholder="john.doe" />
             </Field>
             <Field label="Department">
-              <input className="input-field" value={form.department} onChange={e => set('department', e.target.value)} placeholder="IT / DevOps" />
+              <select className="input-field" value={form.department} onChange={e => set('department', e.target.value)}>
+                <option value="">Select...</option>
+                {(dropdowns.departments || []).map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+              </select>
             </Field>
             <Field label="Location">
-              <input className="input-field" value={form.location} onChange={e => set('location', e.target.value)} placeholder="BJS / DC1" />
+              <select className="input-field" value={form.location} onChange={e => set('location', e.target.value)}>
+                <option value="">Select...</option>
+                {(dropdowns.locations || []).map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
+              </select>
             </Field>
             <Field label="Business Purpose">
               <input className="input-field" value={form.business_purpose} onChange={e => set('business_purpose', e.target.value)} placeholder="Web server" />
@@ -184,16 +231,89 @@ function AddBeijingTab({ onSaved, editAsset, onClearEdit }) {
               <input className="input-field" value={form.serial_number} onChange={e => set('serial_number', e.target.value)} />
             </Field>
 
-            <SectionTitle title="Status" />
+            <SectionTitle title="Status & Patching" />
             <Field label="Server Status">
               <select className="input-field" value={form.server_status} onChange={e => set('server_status', e.target.value)}>
-                {SVRSTATUS_OPTS.map(o => <option key={o} value={o}>{o || 'Select...'}</option>)}
+                <option value="">Select...</option>
+                {(dropdowns.server_status || []).map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
               </select>
             </Field>
             <Field label="EOL Status">
               <select className="input-field" value={form.eol_status} onChange={e => set('eol_status', e.target.value)}>
                 {EOL_OPTIONS.map(o => <option key={o} value={o}>{o || 'Select...'}</option>)}
               </select>
+            </Field>
+            <Field label="Patching Type">
+              <select className="input-field" value={form.patching_type} onChange={e => set('patching_type', e.target.value)}>
+                <option value="">Select...</option>
+                {(dropdowns.patching_types || []).map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+              </select>
+            </Field>
+            <Field label="Server Patch Type">
+              <select className="input-field" value={form.server_patch_type} onChange={e => set('server_patch_type', e.target.value)}>
+                <option value="">Select...</option>
+                {(dropdowns.server_patch_types || []).map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+              </select>
+            </Field>
+            <Field label="Patching Schedule">
+              <select className="input-field" value={form.patching_schedule} onChange={e => set('patching_schedule', e.target.value)}>
+                <option value="">Select...</option>
+                {(dropdowns.patching_schedules || []).map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+              </select>
+            </Field>
+
+            <SectionTitle title="Agent Status" />
+            <Field label="ManageEngine Installed">
+              <div className="flex items-center gap-3 h-9">
+                <Toggle checked={form.me_installed_status} onChange={v => set('me_installed_status', v)} />
+                <span className="text-sm text-gray-600 dark:text-slate-400">{form.me_installed_status ? 'Installed' : 'Not Installed'}</span>
+              </div>
+            </Field>
+            <Field label="Tenable Installed">
+              <div className="flex items-center gap-3 h-9">
+                <Toggle checked={form.tenable_installed_status} onChange={v => set('tenable_installed_status', v)} />
+                <span className="text-sm text-gray-600 dark:text-slate-400">{form.tenable_installed_status ? 'Installed' : 'Not Installed'}</span>
+              </div>
+            </Field>
+
+            <SectionTitle title="Host Details" />
+            <Field label="iDRAC">
+              <div className="flex items-center gap-3 h-9">
+                <Toggle checked={form.idrac_enabled} onChange={v => set('idrac_enabled', v)} />
+                <span className="text-sm text-gray-600 dark:text-slate-400">{form.idrac_enabled ? 'Enabled' : 'Disabled'}</span>
+              </div>
+            </Field>
+            {form.idrac_enabled && (
+              <Field label="iDRAC IP Address">
+                <input className="input-field font-mono" value={form.idrac_ip} onChange={e => set('idrac_ip', e.target.value)} placeholder="10.0.0.100" />
+              </Field>
+            )}
+            {form.idrac_enabled && (
+              <Field label="OME Status">
+                <input className="input-field" value={form.oem_status} onChange={e => set('oem_status', e.target.value)} placeholder="Managed / Discovered" />
+              </Field>
+            )}
+            <Field label="Hosted IP (Physical Host)">
+              <input className="input-field font-mono" value={form.hosted_ip} onChange={e => set('hosted_ip', e.target.value)} placeholder="10.0.0.1" />
+            </Field>
+
+            <SectionTitle title="Credentials" />
+            <Field label="Asset Username">
+              <input className="input-field" value={form.asset_username} onChange={e => set('asset_username', e.target.value)} placeholder="admin" />
+            </Field>
+            <Field label="Asset Password">
+              <div className="relative">
+                <input
+                  type={showPw ? 'text' : 'password'}
+                  className="input-field pr-10"
+                  value={form.asset_password}
+                  onChange={e => set('asset_password', e.target.value)}
+                  placeholder="••••••••"
+                />
+                <button type="button" onClick={() => setShowPw(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
             </Field>
 
             <div className="col-span-full">
@@ -204,6 +324,28 @@ function AddBeijingTab({ onSaved, editAsset, onClearEdit }) {
 
           </div>
         </div>
+
+        {activeCustomFields.length > 0 && (
+          <div className="card mb-4">
+            <h3 className="font-semibold text-gray-700 dark:text-slate-300 mb-3 flex items-center gap-2 text-sm">
+              <Tag size={14} className="text-purple-600" /> Custom Fields
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {activeCustomFields.map(cf => (
+                <Field key={cf.id} label={cf.field_label}>
+                  {cf.field_type === 'dropdown' ? (
+                    <select className="input-field" value={form.custom_field_values[cf.field_key] ?? ''} onChange={e => setCustom(cf.field_key, e.target.value)}>
+                      <option value="">Select…</option>
+                      {(cf.field_options || []).map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  ) : (
+                    <input className="input-field" value={form.custom_field_values[cf.field_key] ?? ''} onChange={e => setCustom(cf.field_key, e.target.value)} />
+                  )}
+                </Field>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="flex gap-3">
           <button type="submit" disabled={loading || !isAdmin || !!dupState.ip} className="btn-primary">
@@ -228,14 +370,19 @@ const ROW_LIMIT_OPTS = [15, 30, 50, 80, 100];
 const COL_VM = 140, COL_IP = 120;
 
 const BEIJING_COMBINED_COL_DEFAULTS = [
-  { key: 'os_hostname',   label: 'Hostname',      visible: true },
-  { key: 'asset_type',    label: 'Asset Type',    visible: true },
-  { key: 'os',            label: 'OS',            visible: true },
-  { key: 'department',    label: 'Department',    visible: true },
-  { key: 'location',      label: 'Location',      visible: true },
-  { key: 'serial_number', label: 'Serial No.',    visible: true },
-  { key: 'status',        label: 'Status',        visible: true },
-  { key: 'migrated_by',   label: 'Migrated By',   visible: true },
+  { key: 'os_hostname',        label: 'Hostname',       visible: true  },
+  { key: 'asset_type',         label: 'Asset Type',     visible: true  },
+  { key: 'os',                 label: 'OS',             visible: true  },
+  { key: 'department',         label: 'Department',     visible: true  },
+  { key: 'location',           label: 'Location',       visible: true  },
+  { key: 'server_status',      label: 'Server Status',  visible: true  },
+  { key: 'eol_status',         label: 'EOL Status',     visible: false },
+  { key: 'patching_type',      label: 'Patching Type',  visible: false },
+  { key: 'me_installed',       label: 'ME Agent',       visible: false },
+  { key: 'tenable_installed',  label: 'Tenable',        visible: false },
+  { key: 'serial_number',      label: 'Serial No.',     visible: false },
+  { key: 'status',             label: 'Migrated',       visible: true  },
+  { key: 'migrated_by',        label: 'Migrated By',    visible: true  },
 ];
 
 function mergeCombinedColConfig(saved) {
@@ -529,14 +676,25 @@ function BeijingListTab({ onEdit, refreshKey, initialBatchFilter = '' }) {
                   </td>
                   {colConfig.filter(c => c.visible).map(col => {
                     switch (col.key) {
-                      case 'os_hostname':   return <td key={col.key} className="table-td font-mono text-xs text-gray-600 dark:text-slate-400 max-w-[140px] truncate">{a.os_hostname || '—'}</td>;
-                      case 'asset_type':    return <td key={col.key} className="table-td text-xs text-gray-600 dark:text-slate-400">{a.asset_type || '—'}</td>;
-                      case 'os':            return <td key={col.key} className="table-td text-xs text-gray-600 dark:text-slate-400 whitespace-nowrap">{[a.os_type, a.os_version].filter(Boolean).join(' ') || '—'}</td>;
-                      case 'department':    return <td key={col.key} className="table-td text-xs text-gray-600 dark:text-slate-400">{a.department || '—'}</td>;
-                      case 'location':      return <td key={col.key} className="table-td text-xs text-gray-600 dark:text-slate-400">{a.location || '—'}</td>;
-                      case 'serial_number': return <td key={col.key} className="table-td font-mono text-xs text-gray-500 dark:text-slate-500">{a.serial_number || '—'}</td>;
-                      case 'status':        return <td key={col.key} className="table-td whitespace-nowrap"><MigratedBadge migrated={a.is_migrated} /></td>;
-                      case 'migrated_by':   return (
+                      case 'os_hostname':       return <td key={col.key} className="table-td font-mono text-xs text-gray-600 dark:text-slate-400 max-w-[140px] truncate">{a.os_hostname || '—'}</td>;
+                      case 'asset_type':        return <td key={col.key} className="table-td text-xs text-gray-600 dark:text-slate-400">{a.asset_type || '—'}</td>;
+                      case 'os':                return <td key={col.key} className="table-td text-xs text-gray-600 dark:text-slate-400 whitespace-nowrap">{[a.os_type, a.os_version].filter(Boolean).join(' ') || '—'}</td>;
+                      case 'department':        return <td key={col.key} className="table-td text-xs text-gray-600 dark:text-slate-400">{a.department || '—'}</td>;
+                      case 'location':          return <td key={col.key} className="table-td text-xs text-gray-600 dark:text-slate-400">{a.location || '—'}</td>;
+                      case 'server_status': {
+                        const ssCls = { Alive: 'bg-green-100 text-green-700', 'Powered Off': 'bg-orange-100 text-orange-700', 'Not Alive': 'bg-red-100 text-red-700' }[a.server_status] || 'bg-gray-100 text-gray-500';
+                        return <td key={col.key} className="table-td whitespace-nowrap">{a.server_status ? <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ssCls}`}>{a.server_status}</span> : <span className="text-gray-400">—</span>}</td>;
+                      }
+                      case 'eol_status': {
+                        const eolCls = { InSupport: 'bg-green-100 text-green-700', EOL: 'bg-orange-100 text-orange-700', Decom: 'bg-red-100 text-red-700' }[a.eol_status] || 'bg-gray-100 text-gray-500';
+                        return <td key={col.key} className="table-td whitespace-nowrap">{a.eol_status ? <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${eolCls}`}>{a.eol_status}</span> : <span className="text-gray-400">—</span>}</td>;
+                      }
+                      case 'patching_type':     return <td key={col.key} className="table-td text-xs text-gray-600 dark:text-slate-400">{a.patching_type || '—'}</td>;
+                      case 'me_installed':      return <td key={col.key} className="table-td text-xs whitespace-nowrap">{a.me_installed_status ? <span className="text-green-700 font-medium">✓ Installed</span> : <span className="text-gray-400">—</span>}</td>;
+                      case 'tenable_installed': return <td key={col.key} className="table-td text-xs whitespace-nowrap">{a.tenable_installed_status ? <span className="text-green-700 font-medium">✓ Installed</span> : <span className="text-gray-400">—</span>}</td>;
+                      case 'serial_number':     return <td key={col.key} className="table-td font-mono text-xs text-gray-500 dark:text-slate-500">{a.serial_number || '—'}</td>;
+                      case 'status':            return <td key={col.key} className="table-td whitespace-nowrap"><MigratedBadge migrated={a.is_migrated} /></td>;
+                      case 'migrated_by':       return (
                         <td key={col.key} className="table-td text-xs text-gray-500 dark:text-slate-500">
                           {a.is_migrated ? (
                             <div>

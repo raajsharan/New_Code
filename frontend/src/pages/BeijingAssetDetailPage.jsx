@@ -6,12 +6,13 @@ import toast from 'react-hot-toast';
 import {
   ArrowLeft, Edit2, Save, X, Server, Building2, Shield,
   RefreshCw, CheckCircle, Info, MapPin, History, Layers,
+  HardDrive, Key, Zap, ExternalLink, Eye, EyeOff,
 } from 'lucide-react';
 
 const FIELDS = [
   { key: 'vm_name',            label: 'VM Name',            mono: true },
-  { key: 'os_hostname',        label: 'OS Hostname',         mono: true },
-  { key: 'ip_address',         label: 'IP Address',          mono: true },
+  { key: 'os_hostname',        label: 'OS Hostname',        mono: true },
+  { key: 'ip_address',         label: 'IP Address',         mono: true },
   { key: 'asset_type',         label: 'Asset Type' },
   { key: 'os_type',            label: 'OS Type' },
   { key: 'os_version',         label: 'OS Version' },
@@ -20,10 +21,17 @@ const FIELDS = [
   { key: 'location',           label: 'Location' },
   { key: 'business_purpose',   label: 'Business Purpose' },
   { key: 'server_status',      label: 'Server Status' },
-  { key: 'serial_number',      label: 'Serial Number',       mono: true },
+  { key: 'serial_number',      label: 'Serial Number',      mono: true },
   { key: 'eol_status',         label: 'EOL Status' },
-  { key: 'asset_tag',          label: 'Asset Tag',           mono: true },
-  { key: 'additional_remarks', label: 'Additional Remarks',  multiline: true },
+  { key: 'asset_tag',          label: 'Asset Tag',          mono: true },
+  { key: 'patching_type',      label: 'Patching Type' },
+  { key: 'server_patch_type',  label: 'Server Patch Type' },
+  { key: 'patching_schedule',  label: 'Patching Schedule' },
+  { key: 'idrac_ip',           label: 'iDRAC IP',           mono: true },
+  { key: 'oem_status',         label: 'OME Status' },
+  { key: 'hosted_ip',          label: 'Hosted IP',          mono: true },
+  { key: 'asset_username',     label: 'Asset Username',     mono: true },
+  { key: 'additional_remarks', label: 'Additional Remarks', multiline: true },
 ];
 
 const eolCls = (s) => ({ InSupport: 'bg-green-100 text-green-700', EOL: 'bg-orange-100 text-orange-700', Decom: 'bg-red-100 text-red-700' }[s] || 'bg-gray-100 text-gray-500');
@@ -89,6 +97,7 @@ export default function BeijingAssetDetailPage() {
   const [saving,       setSaving]       = useState(false);
   const [customFields, setCustomFields] = useState([]);
   const [customValues, setCustomValues] = useState({});
+  const [showPw,       setShowPw]       = useState(false);
 
   const fetchAsset = useCallback(async () => {
     setLoading(true);
@@ -110,9 +119,11 @@ export default function BeijingAssetDetailPage() {
   useEffect(() => { fetchAsset(); }, [fetchAsset]);
 
   function startEdit() {
-    setForm(
-      FIELDS.reduce((acc, f) => ({ ...acc, [f.key]: asset[f.key] ?? '' }), {})
-    );
+    const base = FIELDS.reduce((acc, f) => ({ ...acc, [f.key]: asset[f.key] ?? '' }), {});
+    base.idrac_enabled            = asset.idrac_enabled            ?? false;
+    base.me_installed_status      = asset.me_installed_status      ?? false;
+    base.tenable_installed_status = asset.tenable_installed_status ?? false;
+    setForm(base);
     setCustomValues(asset.custom_field_values || {});
     setEditing(true);
   }
@@ -269,16 +280,129 @@ export default function BeijingAssetDetailPage() {
           )}
         </Section>
 
-        {/* Status */}
-        <Section icon={Shield} title="Status" color="text-green-700">
+        {/* Status & Patching */}
+        <Section icon={Shield} title="Status & Patching" color="text-green-700">
           {editing ? (
-            ['server_status', 'eol_status'].map(k => (
-              <EditRow key={k} field={FIELDS.find(f => f.key === k)} value={form[k]} onChange={setField} />
-            ))
+            <>
+              {['server_status', 'eol_status', 'patching_type', 'server_patch_type', 'patching_schedule'].map(k => (
+                <EditRow key={k} field={FIELDS.find(f => f.key === k)} value={form[k]} onChange={setField} />
+              ))}
+            </>
           ) : (
             <>
-              <InfoRow label="Server Status" value={asset.server_status} badge badgeCls={statusCls(asset.server_status)} />
-              <InfoRow label="EOL Status"    value={asset.eol_status}    badge badgeCls={eolCls(asset.eol_status)} />
+              <InfoRow label="Server Status"    value={asset.server_status}    badge badgeCls={statusCls(asset.server_status)} />
+              <InfoRow label="EOL Status"       value={asset.eol_status}       badge badgeCls={eolCls(asset.eol_status)} />
+              <InfoRow label="Patching Type"    value={asset.patching_type} />
+              <InfoRow label="Server Patch Type" value={asset.server_patch_type} />
+              <InfoRow label="Patching Schedule" value={asset.patching_schedule} />
+            </>
+          )}
+        </Section>
+
+        {/* Agent Status */}
+        <Section icon={Zap} title="Agent Status" color="text-amber-600">
+          {editing ? (
+            <div className="space-y-2">
+              <div className="flex items-center py-2 border-b border-gray-50 dark:border-slate-700/50 gap-3">
+                <span className="text-xs font-medium text-gray-500 dark:text-slate-400 w-40 flex-shrink-0">ManageEngine</span>
+                <button type="button" onClick={() => setField('me_installed_status', !form.me_installed_status)}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer ${form.me_installed_status ? 'bg-blue-600' : 'bg-gray-300 dark:bg-slate-600'}`}>
+                  <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${form.me_installed_status ? 'translate-x-5' : 'translate-x-1'}`} />
+                </button>
+                <span className="text-sm text-gray-600 dark:text-slate-400">{form.me_installed_status ? 'Installed' : 'Not Installed'}</span>
+              </div>
+              <div className="flex items-center py-2 gap-3">
+                <span className="text-xs font-medium text-gray-500 dark:text-slate-400 w-40 flex-shrink-0">Tenable</span>
+                <button type="button" onClick={() => setField('tenable_installed_status', !form.tenable_installed_status)}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer ${form.tenable_installed_status ? 'bg-blue-600' : 'bg-gray-300 dark:bg-slate-600'}`}>
+                  <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${form.tenable_installed_status ? 'translate-x-5' : 'translate-x-1'}`} />
+                </button>
+                <span className="text-sm text-gray-600 dark:text-slate-400">{form.tenable_installed_status ? 'Installed' : 'Not Installed'}</span>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center py-2 border-b border-gray-50 dark:border-slate-700/50">
+                <span className="text-xs font-medium text-gray-500 dark:text-slate-400 w-40 flex-shrink-0">ManageEngine</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${asset.me_installed_status ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                  {asset.me_installed_status ? 'Installed' : 'Not Installed'}
+                </span>
+              </div>
+              <div className="flex items-center py-2">
+                <span className="text-xs font-medium text-gray-500 dark:text-slate-400 w-40 flex-shrink-0">Tenable</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${asset.tenable_installed_status ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                  {asset.tenable_installed_status ? 'Installed' : 'Not Installed'}
+                </span>
+              </div>
+            </>
+          )}
+        </Section>
+
+        {/* Host Details */}
+        <Section icon={HardDrive} title="Host Details" color="text-violet-700">
+          {editing ? (
+            <div className="space-y-1">
+              <div className="flex items-center py-2 border-b border-gray-50 dark:border-slate-700/50 gap-3">
+                <span className="text-xs font-medium text-gray-500 dark:text-slate-400 w-40 flex-shrink-0">iDRAC</span>
+                <button type="button" onClick={() => setField('idrac_enabled', !form.idrac_enabled)}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer ${form.idrac_enabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-slate-600'}`}>
+                  <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${form.idrac_enabled ? 'translate-x-5' : 'translate-x-1'}`} />
+                </button>
+                <span className="text-sm text-gray-600 dark:text-slate-400">{form.idrac_enabled ? 'Enabled' : 'Disabled'}</span>
+              </div>
+              {form.idrac_enabled && <EditRow field={FIELDS.find(f => f.key === 'idrac_ip')}   value={form.idrac_ip}   onChange={setField} />}
+              {form.idrac_enabled && <EditRow field={FIELDS.find(f => f.key === 'oem_status')} value={form.oem_status} onChange={setField} />}
+              <EditRow field={FIELDS.find(f => f.key === 'hosted_ip')} value={form.hosted_ip} onChange={setField} />
+            </div>
+          ) : (
+            <>
+              <InfoRow label="iDRAC" value={asset.idrac_enabled ? `Enabled${asset.idrac_ip ? ' (' + asset.idrac_ip + ')' : ''}` : 'Disabled'} />
+              <InfoRow label="OME Status" value={asset.oem_status} />
+              <div className="flex items-start py-2 border-b border-gray-50 dark:border-slate-700/50">
+                <span className="text-xs font-medium text-gray-500 dark:text-slate-400 w-40 flex-shrink-0">Hosted IP</span>
+                {asset.hosted_ip
+                  ? <div className="flex items-center gap-2">
+                      <button onClick={() => navigate(`/physical-assets?ip=${encodeURIComponent(asset.hosted_ip)}`)}
+                        className="text-sm font-mono text-blue-700 hover:underline flex items-center gap-1">
+                        <Server size={12} />{asset.hosted_ip}
+                      </button>
+                      <a href={`https://${asset.hosted_ip}/ui/#/login`} target="_blank" rel="noopener noreferrer"
+                        className="p-0.5 text-gray-400 hover:text-blue-600"><ExternalLink size={12} /></a>
+                    </div>
+                  : <span className="text-sm text-gray-400 dark:text-slate-500 italic">—</span>}
+              </div>
+            </>
+          )}
+        </Section>
+
+        {/* Credentials */}
+        <Section icon={Key} title="Credentials" color="text-rose-700">
+          {editing ? (
+            <>
+              <EditRow field={FIELDS.find(f => f.key === 'asset_username')} value={form.asset_username} onChange={setField} />
+              <div className="flex items-center py-2 border-b border-gray-50 dark:border-slate-700/50 gap-3">
+                <span className="text-xs font-medium text-gray-500 dark:text-slate-400 w-40 flex-shrink-0">Asset Password</span>
+                <div className="relative flex-1">
+                  <input
+                    type={showPw ? 'text' : 'password'}
+                    className="input-field pr-10 w-full text-sm font-mono"
+                    value={form.asset_password ?? ''}
+                    onChange={e => setField('asset_password', e.target.value)}
+                  />
+                  <button type="button" onClick={() => setShowPw(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <InfoRow label="Username" value={asset.asset_username} mono />
+              <div className="flex items-center py-2">
+                <span className="text-xs font-medium text-gray-500 dark:text-slate-400 w-40 flex-shrink-0">Password</span>
+                <span className="text-sm font-mono text-gray-400 dark:text-slate-500 tracking-widest">••••••••</span>
+                <span className="ml-2 text-xs text-gray-400">(view in list)</span>
+              </div>
             </>
           )}
         </Section>

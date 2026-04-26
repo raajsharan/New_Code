@@ -29,7 +29,18 @@ const FIELD_ALIASES = {
   serial_number:      ['serial', 'serialnumber', 'serial number', 'sn'],
   eol_status:         ['eol', 'eolstatus', 'eol status', 'lifecycle', 'lifecycle status'],
   asset_tag:          ['tag', 'assettag', 'asset tag'],
-  additional_remarks: ['remarks', 'notes', 'comment', 'comments', 'additional remarks'],
+  additional_remarks:         ['remarks', 'notes', 'comment', 'comments', 'additional remarks'],
+  idrac_enabled:              ['idrac', 'idracenabled', 'idrac enabled'],
+  idrac_ip:                   ['idracip', 'idrac ip', 'idrac address'],
+  oem_status:                 ['ome', 'omestatus', 'ome status', 'oemstatus', 'oem status'],
+  hosted_ip:                  ['hostedip', 'hosted ip', 'host ip', 'physicalhost', 'physical host'],
+  asset_username:             ['username', 'assetusername', 'asset username', 'login'],
+  asset_password:             ['password', 'assetpassword', 'asset password', 'passwd'],
+  me_installed_status:        ['me', 'manageengine', 'manage engine', 'meinstalled', 'me installed'],
+  tenable_installed_status:   ['tenable', 'tenableinstalled', 'tenable installed', 'nessus'],
+  patching_type:              ['patchingtype', 'patching type', 'patch type'],
+  server_patch_type:          ['serverpatchtype', 'server patch type', 'patchtype'],
+  patching_schedule:          ['patchingschedule', 'patching schedule', 'patch schedule'],
 };
 
 function buildHeaderMap(headers) {
@@ -254,7 +265,7 @@ router.get('/export/csv', auth, async (req, res) => {
     const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
     const { rows } = await pool.query(`SELECT * FROM beijing_assets ${clause} ORDER BY created_at DESC`, params);
-    const cols = ['id','ip_address','vm_name','os_hostname','asset_type','os_type','os_version','assigned_user','department','location','server_status','serial_number','eol_status','asset_tag','additional_remarks','is_migrated','migrated_at','migrated_by','migration_comment','import_source','submitted_by','created_at'];
+    const cols = ['id','ip_address','vm_name','os_hostname','asset_type','os_type','os_version','assigned_user','department','location','server_status','eol_status','serial_number','asset_tag','idrac_enabled','idrac_ip','oem_status','hosted_ip','asset_username','me_installed_status','tenable_installed_status','patching_type','server_patch_type','patching_schedule','additional_remarks','is_migrated','migrated_at','migrated_by','migration_comment','import_source','submitted_by','created_at'];
     const csv = [
       cols.join(','),
       ...rows.map(r => cols.map(c => JSON.stringify(r[c] ?? '')).join(',')),
@@ -292,7 +303,12 @@ router.get('/template', auth, (req, res) => {
   const headers = [
     'IP Address', 'VM Name', 'Hostname', 'Asset Type', 'OS Type', 'OS Version',
     'Assigned User', 'Department', 'Location', 'Business Purpose', 'Server Status',
-    'Serial Number', 'EOL Status', 'Asset Tag', 'Additional Remarks',
+    'EOL Status', 'Serial Number', 'Asset Tag',
+    'iDRAC Enabled', 'iDRAC IP', 'OME Status', 'Hosted IP',
+    'Asset Username', 'Asset Password',
+    'ME Installed', 'Tenable Installed',
+    'Patching Type', 'Server Patch Type', 'Patching Schedule',
+    'Additional Remarks',
   ];
   const csv = headers.join(',') + '\n';
   res.setHeader('Content-Type', 'text/csv');
@@ -410,18 +426,28 @@ router.post('/', auth, requireAdmin, async (req, res) => {
     const bRes = await pool.query("SELECT 1 FROM beijing_assets WHERE LOWER(TRIM(ip_address)) = LOWER($1) LIMIT 1", [ip]);
     if (bRes.rows.length) return res.status(400).json({ error: 'IP already exists in Beijing Asset List', duplicate: true });
 
-    const FIELDS = ['vm_name','os_hostname','asset_type','os_type','os_version','assigned_user',
-      'department','location','business_purpose','server_status','serial_number',
-      'eol_status','asset_tag','additional_remarks'];
+    const TEXT_FIELDS = [
+      'vm_name', 'os_hostname', 'asset_type', 'os_type', 'os_version',
+      'assigned_user', 'department', 'location', 'business_purpose', 'server_status',
+      'serial_number', 'eol_status', 'asset_tag', 'additional_remarks',
+      'idrac_ip', 'oem_status', 'hosted_ip', 'asset_username', 'asset_password',
+      'patching_type', 'server_patch_type', 'patching_schedule',
+    ];
+    const BOOL_FIELDS = ['idrac_enabled', 'me_installed_status', 'tenable_installed_status'];
+
+    const cols = ['ip_address', ...TEXT_FIELDS, ...BOOL_FIELDS, 'custom_field_values', 'submitted_by'];
+    const vals = [
+      ip,
+      ...TEXT_FIELDS.map(f => req.body[f] || null),
+      ...BOOL_FIELDS.map(f => req.body[f] === true || req.body[f] === 'true'),
+      JSON.stringify(req.body.custom_field_values || {}),
+      req.user?.username || null,
+    ];
+    const placeholders = vals.map((_, i) => `$${i + 1}`).join(',');
 
     const { rows } = await pool.query(
-      `INSERT INTO beijing_assets
-         (ip_address,vm_name,os_hostname,asset_type,os_type,os_version,
-          assigned_user,department,location,business_purpose,server_status,
-          serial_number,eol_status,asset_tag,additional_remarks,submitted_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
-       RETURNING *`,
-      [ip, ...FIELDS.map(f => req.body[f] || null), req.user?.username || null]
+      `INSERT INTO beijing_assets (${cols.join(',')}) VALUES (${placeholders}) RETURNING *`,
+      vals
     );
     res.status(201).json(rows[0]);
   } catch (e) {
@@ -499,20 +525,36 @@ router.get('/:id', auth, async (req, res) => {
 // PUT /api/beijing-assets/:id
 router.put('/:id', auth, requireAdmin, async (req, res) => {
   try {
-    const EDITABLE = [
+    const TEXT_EDITABLE = [
       'vm_name', 'os_hostname', 'ip_address', 'asset_type', 'os_type', 'os_version',
       'assigned_user', 'department', 'location', 'business_purpose', 'server_status',
       'serial_number', 'eol_status', 'asset_tag', 'additional_remarks',
+      'idrac_ip', 'oem_status', 'hosted_ip', 'asset_username', 'asset_password',
+      'patching_type', 'server_patch_type', 'patching_schedule',
     ];
+    const BOOL_EDITABLE = ['idrac_enabled', 'me_installed_status', 'tenable_installed_status'];
+
     const updates = [];
     const values  = [];
     let idx = 1;
-    for (const f of EDITABLE) {
+
+    for (const f of TEXT_EDITABLE) {
       if (req.body[f] !== undefined) {
         updates.push(`${f} = $${idx++}`);
         values.push(req.body[f] || null);
       }
     }
+    for (const f of BOOL_EDITABLE) {
+      if (req.body[f] !== undefined) {
+        updates.push(`${f} = $${idx++}`);
+        values.push(req.body[f] === true || req.body[f] === 'true');
+      }
+    }
+    if (req.body.custom_field_values !== undefined) {
+      updates.push(`custom_field_values = $${idx++}`);
+      values.push(JSON.stringify(req.body.custom_field_values || {}));
+    }
+
     if (!updates.length) return res.status(400).json({ error: 'No fields to update' });
     values.push(req.params.id);
     const { rows } = await pool.query(
