@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { extendedInventoryAPI, dropdownsAPI, transferAPI, beijingAssetsAPI } from '../services/api';
+import { extendedInventoryAPI, dropdownsAPI, transferAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import {
   ArrowRight, CheckCircle, Clock, AlertCircle,
   Search, RefreshCw, ChevronDown, ChevronUp, Info,
-  ArrowRightCircle, CheckSquare, Square, ChevronLeft, ChevronRight,
-  AlertTriangle
 } from 'lucide-react';
 
 const StatusBadge = ({ s }) => {
@@ -191,230 +189,10 @@ function TransferModal({ item, dropdowns, onTransfer, onClose }) {
   );
 }
 
-// ── Beijing Migrate Modal ─────────────────────────────────────────────────────
-function BeijingMigrateModal({ selected, onConfirm, onClose, loading }) {
-  const [comment, setComment] = useState('');
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-            <ArrowRightCircle size={20} className="text-blue-600" />
-          </div>
-          <div>
-            <p className="font-semibold text-gray-900">Migrate to Asset List</p>
-            <p className="text-sm text-gray-500">{selected.length} asset{selected.length !== 1 ? 's' : ''} selected</p>
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Migration Comment <span className="text-gray-400 font-normal">(optional)</span>
-          </label>
-          <textarea
-            rows={3}
-            value={comment}
-            onChange={e => setComment(e.target.value)}
-            placeholder="e.g. Verified by network team, approved for production inventory..."
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-          />
-          <p className="text-xs text-gray-400 mt-1">
-            This comment, along with the timestamp and your username, will be recorded on the migrated asset.
-          </p>
-        </div>
-
-        <div className="flex gap-3 pt-1">
-          <button onClick={onClose} disabled={loading}
-            className="flex-1 px-4 py-2.5 rounded-xl border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-            Cancel
-          </button>
-          <button onClick={() => onConfirm(comment)} disabled={loading}
-            className="flex-1 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2">
-            {loading ? <RefreshCw size={14} className="animate-spin" /> : <ArrowRightCircle size={14} />}
-            Migrate
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Beijing Assets Tab ────────────────────────────────────────────────────────
-function BeijingAssetsTab() {
-  const [assets,   setAssets]   = useState([]);
-  const [total,    setTotal]    = useState(0);
-  const [page,     setPage]     = useState(1);
-  const [loading,  setLoading]  = useState(false);
-  const [search,   setSearch]   = useState('');
-  const [selected, setSelected] = useState(new Set());
-  const [migrateOpen,    setMigrateOpen]    = useState(false);
-  const [migrateLoading, setMigrateLoading] = useState(false);
-
-  const LIMIT = 15;
-
-  const fetchAssets = useCallback(async (pg = page) => {
-    setLoading(true);
-    try {
-      const res = await beijingAssetsAPI.getAll({ page: pg, limit: LIMIT, search, status: 'pending' });
-      setAssets(res.data.assets);
-      setTotal(res.data.total);
-      setSelected(new Set());
-    } catch {
-      toast.error('Failed to load Beijing assets');
-    } finally {
-      setLoading(false);
-    }
-  }, [page, search]);
-
-  useEffect(() => { fetchAssets(1); setPage(1); }, [search]); // eslint-disable-line
-  useEffect(() => { fetchAssets(page); }, [page]);              // eslint-disable-line
-
-  const allSelected = assets.length > 0 && assets.every(a => selected.has(a.id));
-
-  function toggleSelectAll() {
-    if (allSelected) setSelected(new Set());
-    else setSelected(new Set(assets.map(a => a.id)));
-  }
-
-  function toggleOne(id) {
-    setSelected(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
-  }
-
-  async function handleMigrate(comment) {
-    setMigrateLoading(true);
-    try {
-      const res = await beijingAssetsAPI.migrate([...selected], comment);
-      const { migrated, failed } = res.data;
-      if (migrated.length) toast.success(`${migrated.length} asset(s) migrated to Asset List`);
-      if (failed.length)   toast.error(`${failed.length} asset(s) failed — check console`);
-      setMigrateOpen(false);
-      fetchAssets(page);
-    } catch (e) {
-      toast.error(e.response?.data?.error || 'Migration failed');
-    } finally {
-      setMigrateLoading(false);
-    }
-  }
-
-  const pages = Math.ceil(total / LIMIT) || 1;
-
-  return (
-    <div className="space-y-4">
-      {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="relative max-w-sm flex-1">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search IP, name, hostname, dept…"
-            className="w-full pl-8 pr-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          {selected.size > 0 && (
-            <button onClick={() => setMigrateOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">
-              <ArrowRightCircle size={15} />
-              Migrate Selected ({selected.size})
-            </button>
-          )}
-          <button onClick={() => fetchAssets(page)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-300 text-gray-700 text-sm hover:bg-gray-50">
-            <RefreshCw size={15} /> Refresh
-          </button>
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-          <p className="text-sm font-semibold text-gray-700">
-            Pending Migration
-            <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{total}</span>
-          </p>
-          {selected.size > 0 && (
-            <p className="text-xs text-blue-600 font-medium">{selected.size} selected</p>
-          )}
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="px-3 py-3 w-10">
-                  <button onClick={toggleSelectAll} className="text-gray-400 hover:text-blue-600">
-                    {allSelected ? <CheckSquare size={16} className="text-blue-600" /> : <Square size={16} />}
-                  </button>
-                </th>
-                <th className="px-3 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">IP Address</th>
-                <th className="px-3 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">VM Name</th>
-                <th className="px-3 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">Hostname</th>
-                <th className="px-3 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">Asset Type</th>
-                <th className="px-3 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">OS</th>
-                <th className="px-3 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">Department</th>
-                <th className="px-3 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">Location</th>
-                <th className="px-3 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">Import Source</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {loading ? (
-                <tr><td colSpan={9} className="py-16 text-center text-gray-400">
-                  <RefreshCw size={20} className="animate-spin mx-auto mb-2" />Loading…
-                </td></tr>
-              ) : assets.length === 0 ? (
-                <tr><td colSpan={9} className="py-16 text-center text-gray-400">
-                  <CheckCircle size={28} className="mx-auto mb-2 text-green-400" />
-                  <p className="font-medium">{search ? 'No items match your search' : 'No pending Beijing assets to migrate'}</p>
-                </td></tr>
-              ) : assets.map(a => (
-                <tr key={a.id}
-                  className={`hover:bg-gray-50 transition-colors ${selected.has(a.id) ? 'bg-blue-50' : ''}`}>
-                  <td className="px-3 py-2.5">
-                    <button onClick={() => toggleOne(a.id)} className="text-gray-400 hover:text-blue-600">
-                      {selected.has(a.id) ? <CheckSquare size={15} className="text-blue-600" /> : <Square size={15} />}
-                    </button>
-                  </td>
-                  <td className="px-3 py-2.5 font-mono text-xs text-gray-800 whitespace-nowrap">{a.ip_address}</td>
-                  <td className="px-3 py-2.5 text-gray-700 max-w-[140px] truncate">{a.vm_name || '—'}</td>
-                  <td className="px-3 py-2.5 text-gray-600 max-w-[140px] truncate">{a.os_hostname || '—'}</td>
-                  <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{a.asset_type || '—'}</td>
-                  <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{[a.os_type, a.os_version].filter(Boolean).join(' ') || '—'}</td>
-                  <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{a.department || '—'}</td>
-                  <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{a.location || '—'}</td>
-                  <td className="px-3 py-2.5 text-gray-500 text-xs max-w-[140px] truncate" title={a.import_source}>{a.import_source || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="px-4 py-3 border-t border-gray-100 flex justify-end">
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <span>{total} record{total !== 1 ? 's' : ''}</span>
-            <button onClick={() => setPage(p => p - 1)} disabled={page <= 1}
-              className="p-1 rounded hover:bg-gray-100 disabled:opacity-30"><ChevronLeft size={16} /></button>
-            <span className="font-medium">{page} / {pages}</span>
-            <button onClick={() => setPage(p => p + 1)} disabled={page >= pages}
-              className="p-1 rounded hover:bg-gray-100 disabled:opacity-30"><ChevronRight size={16} /></button>
-          </div>
-        </div>
-      </div>
-
-      {migrateOpen && (
-        <BeijingMigrateModal
-          selected={[...selected]}
-          loading={migrateLoading}
-          onConfirm={handleMigrate}
-          onClose={() => setMigrateOpen(false)}
-        />
-      )}
-    </div>
-  );
-}
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function TransferToInventoryPage() {
   const { isAdmin } = useAuth();
-  const [activeTab, setActiveTab] = useState('extended');
-
   const [items, setItems]           = useState([]);
   const [log, setLog]               = useState([]);
   const [dropdowns, setDropdowns]   = useState({});
@@ -484,27 +262,10 @@ export default function TransferToInventoryPage() {
         </button>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200 mb-5">
-        {[
-          { key: 'extended', label: 'Extended Inventory' },
-          { key: 'beijing',  label: 'Beijing Assets' },
-        ].map(t => (
-          <button key={t.key} onClick={() => setActiveTab(t.key)}
-            className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === t.key
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-800'
-            }`}>
-            {t.label}
-          </button>
-        ))}
-      </div>
 
-      {/* ── Extended Inventory Tab ─────────────────────────────────────────── */}
-      {activeTab === 'extended' && (
-        <>
-          {/* Info banner */}
+      {/* ── Extended Inventory ────────────────────────────────────────────── */}
+      <>
+        {/* Info banner */}
           <div className="card mb-5 border-blue-200 bg-blue-50 flex items-start gap-3">
             <Info size={18} className="text-blue-600 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-blue-800">
@@ -631,11 +392,7 @@ export default function TransferToInventoryPage() {
               </div>
             )}
           </div>
-        </>
-      )}
-
-      {/* ── Beijing Assets Tab ─────────────────────────────────────────────── */}
-      {activeTab === 'beijing' && <BeijingAssetsTab />}
+      </>
 
       {/* Transfer modal */}
       {selectedItem && (

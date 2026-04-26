@@ -7,7 +7,7 @@ import { useDeleteConfirm } from '../context/DeleteConfirmContext';
 import Toggle from '../components/Toggle';
 import toast from 'react-hot-toast';
 import { Plus, Edit2, Trash2, Save, X, ChevronDown, ChevronUp,
-  Settings, Server, Layers, HardDrive, ExternalLink, ArrowRight } from 'lucide-react';
+  Settings, Server, Layers, HardDrive, ExternalLink, ArrowRight, Globe } from 'lucide-react';
 
 const TABLE_CONFIG = [
   { key: 'asset_types', label: 'Asset Types', examples: ['VM', 'Physical Server'] },
@@ -561,7 +561,7 @@ const PAGE_CONFIG = {
   'physical-server': {
     icon: HardDrive,
     title: 'Physical Server',
-    description: 'Controls the fields and options for the Register Physical Server form. Fields include Hosted IP, VM/Asset Name, Department, Location, Server Model, Serial Number, CPU Cores, RAM, Total Disks, OME Support Status, Rack Number, Server Position, and Additional Notes.',
+    description: 'Controls the fields and options for the Register Physical Server form. Fields include Hosted IP, Device Name, Department, Location, Server Model, Serial Number, CPU Cores, RAM, Total Disks, OME Support Status, Rack Number, Server Position, and Additional Notes.',
     dropdownGroups: [
       { label: 'Ownership', keys: ['departments'] },
       { label: 'Location',  keys: ['locations'] },
@@ -572,6 +572,16 @@ const PAGE_CONFIG = {
       { to: '/physical-server-list',         icon: Server,    label: 'Physical Servers List',    desc: 'View, import, and export all physical server records' },
     ],
     note: 'OME Support Status (Active/Expired toggle) is a built-in field on the Register Physical Server form. Use Physical Asset Config to add custom fields or change field types.',
+  },
+  'beijing-asset': {
+    icon: Globe,
+    title: 'Beijing Asset',
+    description: 'Controls custom fields and settings for the Beijing Asset inventory. Standard fields include VM Name, OS Hostname, IP Address, Asset Type, OS Type, OS Version, Department, Location, and Migration Tracking.',
+    dropdownGroups: [],
+    links: [
+      { to: '/beijing-asset-fields', icon: Globe,    label: 'Beijing Asset Fields Config', desc: 'Add/edit custom fields on the Beijing Asset form' },
+      { to: '/beijing-asset-list',   icon: Server,   label: 'Beijing Asset List',          desc: 'View and manage all Beijing asset records' },
+    ],
   },
 };
 
@@ -678,6 +688,7 @@ export default function ConfigurationPage() {
     { key: 'add-asset',       label: 'Add New Asset',        icon: Server },
     { key: 'add-ext-asset',   label: 'Add New Ext. Asset',   icon: Layers },
     { key: 'physical-server', label: 'Physical Server',      icon: HardDrive },
+    { key: 'beijing-asset',   label: 'Beijing Asset',        icon: Globe },
     { key: 'all-dropdowns',   label: 'All Dropdown Values',  icon: Settings },
   ];
 

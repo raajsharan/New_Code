@@ -32,7 +32,7 @@ const STANDARD_GROUPS = [
   {
     group: 'General',
     fields: [
-      { key: 'vm_name',          label: 'VM / Asset Name',  type: 'textbox' },
+      { key: 'vm_name',          label: 'Device Name',      type: 'textbox' },
       { key: 'department_id',    label: 'Department',       type: 'dropdown' },
       { key: 'location_id',      label: 'Location',         type: 'dropdown' },
       { key: 'additional_notes', label: 'Additional Notes', type: 'textbox', note: 'Multi-line' },
@@ -68,7 +68,7 @@ const TYPE_CHANGEABLE_FIELDS_DEF = [
   { key:'rack_number',        label:'Rack Number',         defaultType:'textbox', group:'Rack Information' },
   { key:'server_position',    label:'Server Position (U)', defaultType:'textbox', group:'Rack Information' },
   { key:'additional_notes',   label:'Additional Notes',    defaultType:'textbox', group:'General' },
-  { key:'vm_name',            label:'VM / Asset Name',     defaultType:'textbox', group:'General' },
+  { key:'vm_name',            label:'Device Name',         defaultType:'textbox', group:'General' },
   { key:'department_id',      label:'Department',          defaultType:'dropdown',group:'General' },
   { key:'location_id',        label:'Location',            defaultType:'dropdown',group:'General' },
 ];

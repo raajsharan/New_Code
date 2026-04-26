@@ -275,7 +275,7 @@ export default function PhysicalAssetPage() {
               <InfoRow label="Rack Number"     value={server.rack_number} mono />
               <InfoRow label="Server Position" value={server.server_position} mono />
               <InfoRow label="Hosted IP"       value={server.hosted_ip || hostedIP} mono />
-              {server.vm_name && <InfoRow label="VM / Asset Name" value={server.vm_name} />}
+              {server.vm_name && <InfoRow label="Device Name" value={server.vm_name} />}
               {server.department && <InfoRow label="Department" value={server.department} />}
               {server.location && <InfoRow label="Location" value={server.location} />}
             </div>
@@ -340,8 +340,8 @@ export default function PhysicalAssetPage() {
                 </Field>
               )}
 
-              {renderBuiltinField('vm_name', 'VM / Asset Name',
-                <Field label={fieldTypeOverrides?.vm_name?.label || 'VM / Asset Name'} hint="Linked VM or primary asset on this host">
+              {renderBuiltinField('vm_name', 'Device Name',
+                <Field label={fieldTypeOverrides?.vm_name?.label || 'Device Name'} hint="Linked VM or primary asset on this host">
                   <input className="input-field" value={form.vm_name}
                     onChange={e => set('vm_name', e.target.value)} placeholder="e.g. ESX-HOST-01" />
                 </Field>
