@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { auditAPI } from '../services/api';
 import toast from 'react-hot-toast';
 import { Search, RefreshCw, Shield, ChevronLeft, ChevronRight } from 'lucide-react';
 
-const ENTITY_TYPES = ['', 'asset', 'ext_item', 'user', 'transfer'];
+const ENTITY_TYPES = ['', 'asset', 'ext_item', 'user', 'transfer', 'beijing_asset'];
 const STORAGE_KEY = 'audit_explorer_state_v1';
 
 function toDisplay(v) {
@@ -40,12 +41,19 @@ function buildDiffRows(log) {
 }
 
 export default function AuditExplorerPage() {
+  const [searchParams] = useSearchParams();
   const [logs, setLogs] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [onlyChanged, setOnlyChanged] = useState(true);
   const [filters, setFilters] = useState(() => {
+    // URL params take priority (used for "Audit Trail" links from detail pages)
+    const urlQ = searchParams.get('q') || '';
+    const urlEntity = searchParams.get('entity_type') || '';
+    if (urlQ || urlEntity) {
+      return { q: urlQ, entity_type: urlEntity, action: '', actor: '', from: '', to: '' };
+    }
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) {

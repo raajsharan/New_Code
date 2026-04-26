@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import {
   Trash2, RotateCcw, RefreshCw, AlertTriangle,
-  ChevronLeft, ChevronRight, Search,
+  ChevronLeft, ChevronRight, Search, X, Eye,
 } from 'lucide-react';
 
 const SOURCES = [
@@ -30,13 +30,73 @@ const SOURCES = [
   },
 ];
 
+function RestoreDiffModal({ item, onConfirm, onCancel }) {
+  if (!item) return null;
+  const data = item.original_data || {};
+  const entries = Object.entries(data).filter(([k]) => !['id','created_at','updated_at'].includes(k));
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[80vh] flex flex-col">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-gray-800">Restore Item Preview</h2>
+          <button onClick={onCancel} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        </div>
+        <div className="px-5 py-3 overflow-y-auto flex-1">
+          <p className="text-xs text-gray-500 mb-3">
+            The following data will be restored. Verify before confirming.
+          </p>
+          <div className="rounded-xl border border-gray-100 overflow-hidden">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="px-3 py-2 text-left font-semibold text-gray-500 w-1/3">Field</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-500">Value</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {entries.map(([k, v]) => {
+                  const display = v === null || v === undefined || v === '' ? <span className="text-gray-300 italic">empty</span>
+                    : typeof v === 'object' ? <span className="font-mono text-gray-500">{JSON.stringify(v)}</span>
+                    : typeof v === 'boolean' ? <span>{v ? 'Yes' : 'No'}</span>
+                    : <span>{String(v)}</span>;
+                  return (
+                    <tr key={k} className="hover:bg-gray-50">
+                      <td className="px-3 py-1.5 font-medium text-gray-600 align-top">{k}</td>
+                      <td className="px-3 py-1.5 text-gray-800 break-all">{display}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-3 text-xs text-gray-400">
+            Deleted by <span className="font-medium text-gray-600">{item.deleted_by || 'unknown'}</span> on{' '}
+            {new Date(item.deleted_at).toLocaleString()}
+          </div>
+        </div>
+        <div className="px-5 py-4 border-t border-gray-100 flex justify-end gap-2">
+          <button onClick={onCancel} className="px-4 py-2 text-sm border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50">
+            Cancel
+          </button>
+          <button onClick={onConfirm} className="px-4 py-2 text-sm bg-green-600 text-white rounded-xl hover:bg-green-700 flex items-center gap-1.5">
+            <RotateCcw size={13} /> Restore
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DeletedTab({ source, cols }) {
   const { isSuperAdmin, isAdmin } = useAuth();
-  const [items,   setItems]   = useState([]);
-  const [total,   setTotal]   = useState(0);
-  const [page,    setPage]    = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [search,  setSearch]  = useState('');
+  const [items,    setItems]    = useState([]);
+  const [total,    setTotal]    = useState(0);
+  const [page,     setPage]     = useState(1);
+  const [loading,  setLoading]  = useState(true);
+  const [search,   setSearch]   = useState('');
+  const [restoreItem, setRestoreItem] = useState(null);
+  const [previewItem, setPreviewItem] = useState(null);
   const LIMIT = 20;
 
   const fetchItems = useCallback(async (pg = page) => {
@@ -61,13 +121,17 @@ function DeletedTab({ source, cols }) {
     } catch { toast.error('Delete failed'); }
   };
 
-  const handleRestore = async (id) => {
-    if (!window.confirm('Restore this item back to its original list?')) return;
+  const handleRestoreConfirm = async () => {
+    if (!restoreItem) return;
     try {
-      await deletedItemsAPI.restore(id);
+      await deletedItemsAPI.restore(restoreItem.id);
       toast.success('Restored successfully');
+      setRestoreItem(null);
       fetchItems(page);
-    } catch (e) { toast.error(e.response?.data?.error || 'Restore failed'); }
+    } catch (e) {
+      toast.error(e.response?.data?.error || 'Restore failed');
+      setRestoreItem(null);
+    }
   };
 
   const pages = Math.ceil(total / LIMIT) || 1;
@@ -75,6 +139,21 @@ function DeletedTab({ source, cols }) {
 
   return (
     <div className="space-y-4">
+      {restoreItem && (
+        <RestoreDiffModal
+          item={restoreItem}
+          onConfirm={handleRestoreConfirm}
+          onCancel={() => setRestoreItem(null)}
+        />
+      )}
+      {previewItem && (
+        <RestoreDiffModal
+          item={previewItem}
+          onConfirm={() => setPreviewItem(null)}
+          onCancel={() => setPreviewItem(null)}
+        />
+      )}
+
       {/* Search + refresh */}
       <div className="glass-panel px-4 py-3 flex items-center gap-3">
         <div className="relative flex-1 max-w-sm">
@@ -102,7 +181,7 @@ function DeletedTab({ source, cols }) {
                 ))}
                 <th className="px-3 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">Deleted By</th>
                 <th className="px-3 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">Deleted At</th>
-                <th className="px-3 py-3 text-center font-semibold text-gray-600 w-20">Actions</th>
+                <th className="px-3 py-3 text-center font-semibold text-gray-600 w-24">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -128,8 +207,13 @@ function DeletedTab({ source, cols }) {
                   </td>
                   <td className="px-3 py-2.5">
                     <div className="flex gap-1 justify-center">
+                      <button onClick={() => setPreviewItem(item)}
+                        className="p-1.5 text-gray-400 hover:bg-gray-100 rounded transition-colors"
+                        title="Preview data">
+                        <Eye size={13} />
+                      </button>
                       {isAdmin && (
-                        <button onClick={() => handleRestore(item.id)}
+                        <button onClick={() => setRestoreItem(item)}
                           className="p-1.5 text-green-600 hover:bg-green-100 rounded transition-colors"
                           title="Restore to original list">
                           <RotateCcw size={13} />

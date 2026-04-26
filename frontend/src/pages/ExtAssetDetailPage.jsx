@@ -122,6 +122,13 @@ export default function ExtAssetDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={fetchItem} className="btn-secondary text-xs p-2" title="Refresh"><RefreshCw size={14}/></button>
+          <button
+            onClick={() => navigate(`/audit-explorer?q=${encodeURIComponent(item.ip_address||item.vm_name||'')}&entity_type=ext_item`)}
+            className="btn-secondary text-xs flex items-center gap-1"
+            title="View full audit trail"
+          >
+            <Layers size={13}/> Audit Trail
+          </button>
           {canWrite && (
             <button onClick={() => navigate('/ext-asset-list', { state: { editItemId: item.id, tab: 'add' } })}
               className="btn-primary text-xs">

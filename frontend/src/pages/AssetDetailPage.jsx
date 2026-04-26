@@ -143,6 +143,13 @@ export default function AssetDetailPage() {
           <button onClick={fetchAsset} className="btn-secondary text-xs p-2" title="Refresh">
             <RefreshCw size={14}/>
           </button>
+          <button
+            onClick={() => navigate(`/audit-explorer?q=${encodeURIComponent(asset.ip_address||asset.vm_name||'')}&entity_type=asset`)}
+            className="btn-secondary text-xs flex items-center gap-1"
+            title="View full audit trail"
+          >
+            <Layers size={13}/> Audit Trail
+          </button>
           {canWrite && (
             <button onClick={() => navigate('/asset-list', { state: { editAssetId: asset.id, tab: 'add' } })}
               className="btn-primary text-xs">

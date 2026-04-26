@@ -64,6 +64,7 @@ export const assetsAPI = {
   create: (d) => api.post('/assets', d),
   update: (id, d) => api.put(`/assets/${id}`, d),
   delete: (id) => api.delete(`/assets/${id}`),
+  bulkDelete: (ids) => api.delete('/assets/bulk', { data: { ids } }),
   bulkUpdate: (d) => api.post('/assets/bulk-update', d),
   getBulkJob: (jobId) => api.get(`/assets/bulk-update/${jobId}`),
   checkDuplicate: (params) => api.get('/assets/check-duplicate', { params }),
@@ -176,6 +177,7 @@ export const extendedInventoryAPI = {
   create: (d) => api.post('/extended-inventory', d),
   update: (id, d) => api.put(`/extended-inventory/${id}`, d),
   delete: (id) => api.delete(`/extended-inventory/${id}`),
+  bulkDelete: (ids) => api.delete('/extended-inventory/bulk', { data: { ids } }),
   checkDuplicate: (params) => api.get('/extended-inventory/check-duplicate', { params }),
   exportCSV: (params) => api.get('/extended-inventory/export/csv', { params, responseType: 'blob' }),
   downloadTemplate: () => api.get('/extended-inventory/export/csv-template', { responseType: 'blob' }),
@@ -295,6 +297,7 @@ export const beijingAssetsAPI = {
   update:           (id, d)  => api.put(`/beijing-assets/${id}`, d),
   exportCSV:        (params) => api.get('/beijing-assets/export/csv', { params, responseType: 'blob' }),
   remove:           (id)     => api.delete(`/beijing-assets/${id}`),
+  bulkDelete:       (ids)    => api.delete('/beijing-assets/bulk', { data: { ids } }),
   migrate:          (ids, migration_comment) => api.post('/beijing-assets/migrate', { ids, migration_comment }),
   checkDuplicate:   (params) => api.get('/beijing-assets/check-duplicate', { params }),
   downloadTemplate: ()       => api.get('/beijing-assets/template', { responseType: 'blob' }),
@@ -309,6 +312,7 @@ export const beijingAssetsAPI = {
     return api.post('/beijing-assets/preview', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
   importSelected: (rows) => api.post('/beijing-assets/import-selected', { rows }),
+  getBatches:         ()          => api.get('/beijing-assets/batches'),
   getCustomFields:    ()          => api.get('/beijing-assets/custom-fields'),
   addCustomField:     (d)         => api.post('/beijing-assets/custom-fields/add', d),
   updateCustomField:  (id, d)     => api.put(`/beijing-assets/custom-fields/${id}`, d),
@@ -319,6 +323,13 @@ export const deletedItemsAPI = {
   getAll:    (params) => api.get('/deleted-items', { params }),
   hardDelete:(id)     => api.delete(`/deleted-items/${id}`),
   restore:   (id)     => api.post(`/deleted-items/restore/${id}`),
+};
+
+export const savedViewsAPI = {
+  getAll:  (scope)         => api.get('/saved-views', { params: { scope } }),
+  create:  (d)             => api.post('/saved-views', d),
+  update:  (id, d)         => api.put(`/saved-views/${id}`, d),
+  remove:  (id)            => api.delete(`/saved-views/${id}`),
 };
 
 export const tenableAPI = {

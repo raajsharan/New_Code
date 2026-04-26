@@ -666,6 +666,26 @@ router.put('/:id', auth, requireWrite, async (req, res) => {
   }
 });
 
+// DELETE /api/assets/bulk
+router.delete('/bulk', auth, requireWrite, async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(Boolean) : [];
+    if (!ids.length) return res.status(400).json({ error: 'ids array required' });
+    let deleted = 0;
+    for (const id of ids) {
+      const before = await pool.query(`${ASSET_SELECT} WHERE a.id=$1`, [id]);
+      if (!before.rows.length) continue;
+      await saveToDeletedItems('assets', before.rows[0].id, before.rows[0], req.user?.username);
+      await pool.query('DELETE FROM assets WHERE id=$1', [id]);
+      try {
+        await writeAuditLog({ entityType: 'asset', entityId: id, action: 'delete', beforeState: before.rows[0], afterState: null, user: req.user, req });
+      } catch (ae) { console.warn('Audit log failed (bulk asset delete):', ae.message); }
+      deleted++;
+    }
+    res.json({ deleted });
+  } catch { res.status(500).json({ error: 'Server error' }); }
+});
+
 // DELETE /api/assets/:id
 router.delete('/:id', auth, requireWrite, async (req, res) => {
   try {

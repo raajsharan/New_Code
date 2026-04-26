@@ -75,10 +75,11 @@ router.get('/', auth, async (req, res) => {
     }
     if (status === 'migrated') where.push('is_migrated = TRUE');
     else if (status === 'pending') where.push('is_migrated = FALSE');
-    if (req.query.department)    { where.push(`department = $${idx++}`);    params.push(req.query.department); }
-    if (req.query.location)      { where.push(`location = $${idx++}`);      params.push(req.query.location); }
-    if (req.query.asset_type)    { where.push(`asset_type = $${idx++}`);    params.push(req.query.asset_type); }
-    if (req.query.server_status) { where.push(`server_status = $${idx++}`); params.push(req.query.server_status); }
+    if (req.query.department)       { where.push(`department = $${idx++}`);       params.push(req.query.department); }
+    if (req.query.location)         { where.push(`location = $${idx++}`);         params.push(req.query.location); }
+    if (req.query.asset_type)       { where.push(`asset_type = $${idx++}`);       params.push(req.query.asset_type); }
+    if (req.query.server_status)    { where.push(`server_status = $${idx++}`);    params.push(req.query.server_status); }
+    if (req.query.import_batch_id)  { where.push(`import_batch_id = $${idx++}`);  params.push(req.query.import_batch_id); }
 
     const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
@@ -267,6 +268,25 @@ router.get('/export/csv', auth, async (req, res) => {
   }
 });
 
+// GET /api/beijing-assets/batches  — distinct import batches with counts
+router.get('/batches', auth, async (req, res) => {
+  try {
+    const r = await pool.query(`
+      SELECT import_batch_id, import_source,
+             COUNT(*)::int AS total_assets,
+             COUNT(*) FILTER (WHERE is_migrated)::int AS migrated,
+             MIN(created_at) AS imported_at,
+             MIN(submitted_by) AS submitted_by
+      FROM beijing_assets
+      WHERE import_batch_id IS NOT NULL AND import_batch_id != ''
+      GROUP BY import_batch_id, import_source
+      ORDER BY MIN(created_at) DESC
+      LIMIT 100
+    `);
+    res.json({ batches: r.rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // GET /api/beijing-assets/template
 router.get('/template', auth, (req, res) => {
   const headers = [
@@ -427,6 +447,26 @@ router.get('/check-duplicate', auth, async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// DELETE /api/beijing-assets/bulk
+router.delete('/bulk', auth, requireAdmin, async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(Boolean) : [];
+    if (!ids.length) return res.status(400).json({ error: 'ids array required' });
+    let deleted = 0;
+    for (const id of ids) {
+      const { rows } = await pool.query('SELECT * FROM beijing_assets WHERE id=$1', [id]);
+      if (!rows.length) continue;
+      await saveToDeletedItems('beijing_assets', rows[0].id, rows[0], req.user?.username);
+      await pool.query('DELETE FROM beijing_assets WHERE id=$1', [id]);
+      try {
+        await writeAuditLog({ entityType: 'beijing_asset', entityId: id, action: 'delete', beforeState: rows[0], afterState: null, user: req.user, req });
+      } catch (ae) { console.warn('Audit log failed (bulk beijing delete):', ae.message); }
+      deleted++;
+    }
+    res.json({ deleted });
+  } catch { res.status(500).json({ error: 'Server error' }); }
 });
 
 // DELETE /api/beijing-assets/:id

@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import {
   ArrowLeft, Edit2, Save, X, Server, Building2, Shield,
-  RefreshCw, CheckCircle, Info, MapPin,
+  RefreshCw, CheckCircle, Info, MapPin, History, Layers,
 } from 'lucide-react';
 
 const FIELDS = [
@@ -82,17 +82,23 @@ export default function BeijingAssetDetailPage() {
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
 
-  const [asset,   setAsset]   = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(false);
-  const [form,    setForm]    = useState({});
-  const [saving,  setSaving]  = useState(false);
+  const [asset,        setAsset]        = useState(null);
+  const [loading,      setLoading]      = useState(true);
+  const [editing,      setEditing]      = useState(false);
+  const [form,         setForm]         = useState({});
+  const [saving,       setSaving]       = useState(false);
+  const [customFields, setCustomFields] = useState([]);
+  const [customValues, setCustomValues] = useState({});
 
   const fetchAsset = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await beijingAssetsAPI.getById(id);
+      const [r, cfR] = await Promise.all([
+        beijingAssetsAPI.getById(id),
+        beijingAssetsAPI.getCustomFields().catch(() => ({ data: [] })),
+      ]);
       setAsset(r.data);
+      setCustomFields(cfR.data || []);
     } catch {
       toast.error('Asset not found');
       navigate('/beijing-asset-list');
@@ -107,12 +113,14 @@ export default function BeijingAssetDetailPage() {
     setForm(
       FIELDS.reduce((acc, f) => ({ ...acc, [f.key]: asset[f.key] ?? '' }), {})
     );
+    setCustomValues(asset.custom_field_values || {});
     setEditing(true);
   }
 
   function cancelEdit() {
     setEditing(false);
     setForm({});
+    setCustomValues({});
   }
 
   function setField(key, val) {
@@ -122,10 +130,11 @@ export default function BeijingAssetDetailPage() {
   async function saveEdit() {
     setSaving(true);
     try {
-      const r = await beijingAssetsAPI.update(id, form);
+      const r = await beijingAssetsAPI.update(id, { ...form, custom_field_values: customValues });
       setAsset(r.data);
       setEditing(false);
       setForm({});
+      setCustomValues({});
       toast.success('Asset updated');
     } catch (e) {
       toast.error(e.response?.data?.error || 'Save failed');
@@ -179,6 +188,13 @@ export default function BeijingAssetDetailPage() {
         <div className="flex items-center gap-2">
           <button onClick={fetchAsset} className="btn-secondary text-xs p-2" title="Refresh">
             <RefreshCw size={14} />
+          </button>
+          <button
+            onClick={() => navigate(`/audit-explorer?q=${encodeURIComponent(asset.ip_address || '')}&entity_type=beijing_asset`)}
+            className="btn-secondary text-xs flex items-center gap-1"
+            title="View audit trail"
+          >
+            <History size={13} /> Audit Trail
           </button>
           {isAdmin && !asset.is_migrated && !editing && (
             <button onClick={startEdit} className="btn-primary text-xs">
@@ -294,6 +310,53 @@ export default function BeijingAssetDetailPage() {
                   onChange={e => setField('additional_remarks', e.target.value)}
                 />
               : <p className="text-sm text-gray-700 dark:text-slate-300 whitespace-pre-wrap">{asset.additional_remarks}</p>}
+          </div>
+        )}
+
+        {/* Custom Fields — full width */}
+        {customFields.length > 0 && (
+          <div className="card md:col-span-2">
+            <h3 className="font-semibold text-gray-800 dark:text-slate-100 mb-3 flex items-center gap-2 text-sm">
+              <Layers size={14} className="text-purple-600" /> Custom Fields
+            </h3>
+            {editing ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {customFields.map(cf => (
+                  <div key={cf.id}>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1">{cf.field_label}</label>
+                    {cf.field_type === 'dropdown' ? (
+                      <select
+                        className="input-field text-sm w-full"
+                        value={customValues[cf.field_key] ?? ''}
+                        onChange={e => setCustomValues(prev => ({ ...prev, [cf.field_key]: e.target.value }))}
+                      >
+                        <option value="">Select…</option>
+                        {(cf.field_options || []).map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    ) : (
+                      <input
+                        className="input-field text-sm w-full"
+                        value={customValues[cf.field_key] ?? ''}
+                        onChange={e => setCustomValues(prev => ({ ...prev, [cf.field_key]: e.target.value }))}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                {customFields.map(cf => {
+                  const val = asset.custom_field_values?.[cf.field_key];
+                  return (
+                    <InfoRow
+                      key={cf.id}
+                      label={cf.field_label}
+                      value={val || '—'}
+                    />
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>

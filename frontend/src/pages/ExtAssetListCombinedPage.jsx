@@ -476,6 +476,8 @@ function ExtListTab({ onEdit, refreshKey }) {
   const [showBulkModal,  setShowBulkModal]  = useState(false);
   const [bulkSubmitting, setBulkSubmitting] = useState(false);
   const [bulkDryRunning, setBulkDryRunning] = useState(false);
+  const [selected,       setSelected]       = useState(new Set());
+  const [bulkDeleting,   setBulkDeleting]   = useState(false);
   const [bulkPatch, setBulkPatch] = useState({
     assigned_user:'', department_id:'', server_status_id:'', patching_type_id:'',
     patching_schedule_id:'', location_id:'', eol_status:'', status:'',
@@ -501,6 +503,7 @@ function ExtListTab({ onEdit, refreshKey }) {
       Object.keys(params).forEach(k=>{if(!params[k])delete params[k];});
       const r=await extendedInventoryAPI.getAll(params);
       setItems(r.data.items); setTotal(r.data.total);
+      setSelected(new Set());
     } catch { toast.error('Failed to load'); }
     finally { setLoading(false); }
   },[page,limit,filters]);
@@ -510,6 +513,10 @@ function ExtListTab({ onEdit, refreshKey }) {
 
   const setFilter=(k,v)=>{setFilters(p=>({...p,[k]:v}));setPage(1);};
   const handleDelete=(item)=>{requestDelete(item.vm_name||item.asset_name||item.ip_address||'this item',async()=>{try{await extendedInventoryAPI.delete(item.id);toast.success('Deleted');fetchItems();}catch(err){toast.error(err.response?.data?.error||'Failed');}});};
+  const handleBulkDelete=async()=>{const ids=[...selected];if(!ids.length)return;if(!window.confirm(`Delete ${ids.length} selected item${ids.length>1?'s':''}? They will be moved to Deleted Items.`))return;setBulkDeleting(true);try{const r=await extendedInventoryAPI.bulkDelete(ids);toast.success(`Deleted ${r.data.deleted} item${r.data.deleted!==1?'s':''}`);fetchItems();}catch{toast.error('Bulk delete failed');}finally{setBulkDeleting(false);}};
+  const allPageSelected=items.length>0&&items.every(a=>selected.has(a.id));
+  const toggleSelectAll=()=>{if(allPageSelected)setSelected(new Set());else setSelected(new Set(items.map(a=>a.id)));};
+  const toggleSelect=(id)=>{setSelected(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n;});};
 
   const handleExport=async()=>{setExporting(true);try{const r=await extendedInventoryAPI.exportCSV({...filters});const url=URL.createObjectURL(new Blob([r.data],{type:'text/csv'}));const a=document.createElement('a');a.href=url;a.download=`extended-inventory-${new Date().toISOString().split('T')[0]}.csv`;a.click();URL.revokeObjectURL(url);toast.success('Exported');}catch{toast.error('Export failed');}finally{setExporting(false);}};
 
@@ -583,7 +590,8 @@ function ExtListTab({ onEdit, refreshKey }) {
             </select>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {canWrite && selected.size > 0 && <button onClick={handleBulkDelete} disabled={bulkDeleting} className="btn-secondary text-xs bg-red-50 border-red-200 text-red-700 hover:bg-red-100"><Trash2 size={13}/>{bulkDeleting?'Deleting…':`Delete ${selected.size}`}</button>}
           {canBulkUpdate && <button onClick={()=>setShowBulkModal(true)} className="btn-secondary text-xs"><PlusCircle size={13}/> Bulk Update</button>}
           <button onClick={handleExport} disabled={exporting} className="btn-secondary text-xs"><Download size={13}/>{exporting?'Exporting...':'Export CSV'}</button>
           <button onClick={fetchItems} className="btn-secondary text-xs"><RefreshCw size={13}/> Refresh</button>
@@ -639,8 +647,9 @@ function ExtListTab({ onEdit, refreshKey }) {
           <table className="w-full text-sm" style={{borderCollapse:'separate',borderSpacing:0}}>
             <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-30">
               <tr>
-                <th className="table-th bg-gray-50 z-40 border-r border-gray-200" style={{position:'sticky',left:0,minWidth:COL_VM}}>VM Name</th>
-                <th className="table-th bg-gray-50 z-40 border-r border-gray-200" style={{position:'sticky',left:COL_VM,minWidth:COL_IP}}>IP Address</th>
+                {canWrite && <th className="table-th bg-gray-50 z-40 w-8 px-2" style={{position:'sticky',left:0}}><input type="checkbox" checked={allPageSelected} onChange={toggleSelectAll} className="accent-blue-600"/></th>}
+                <th className="table-th bg-gray-50 z-40 border-r border-gray-200" style={{position:'sticky',left:canWrite?32:0,minWidth:COL_VM}}>VM Name</th>
+                <th className="table-th bg-gray-50 z-40 border-r border-gray-200" style={{position:'sticky',left:(canWrite?32:0)+COL_VM,minWidth:COL_IP}}>IP Address</th>
                 {colConfig.filter(c=>c.visible&&c.key!=='actions').map(c=>{
                   const labels={os_hostname:'Hostname',asset_type:'Asset Type',os_type:'OS',os_version:'OS Version',assigned_user:'Assigned User',department:'Dept',server_status:'Srv Status',status:'Rec Status',patching_type:'Patch Type',server_patch_type:'Ser. Patch Type',patching_schedule:'Schedule',location:'Location',serial_number:'Serial',idrac:'iDRAC',oem_status:'OME',eol_status:'EOL',me_installed:'ME',tenable_installed:'Tenable',hosted_ip:'Hosted IP',asset_tag:'Asset Tag',business_purpose:'Business Purpose',additional_remarks:'Add. Remark',asset_username:'Username',asset_password:'Password',submitted_by:'Submitted By',updated_at:'Last Modified'};
                   return <th key={c.key} className="table-th bg-gray-50 z-30">{labels[c.key]||c.key}</th>;
@@ -653,11 +662,12 @@ function ExtListTab({ onEdit, refreshKey }) {
               {loading?Array(5).fill(0).map((_,i)=><tr key={i} className="animate-pulse"><td className="table-td bg-white" style={{position:'sticky',left:0}}><div className="h-4 bg-gray-100 rounded"/></td><td className="table-td bg-white" style={{position:'sticky',left:COL_VM}}><div className="h-4 bg-gray-100 rounded"/></td>{colConfig.filter(c=>c.visible&&c.key!=='actions').map((_,j)=><td key={j} className="table-td"><div className="h-4 bg-gray-100 rounded"/></td>)}{customFields.map(cf=><td key={cf.field_key} className="table-td"><div className="h-4 bg-gray-100 rounded"/></td>)}<td className="table-td"><div className="h-4 bg-gray-100 rounded"/></td></tr>)
               :items.length===0?<tr><td colSpan={2+colConfig.filter(c=>c.visible&&c.key!=='actions').length+customFields.length+1} className="text-center py-16 text-gray-400"><Layers size={32} className="mx-auto mb-2 opacity-20"/><p className="font-medium">No extended inventory records</p></td></tr>
               :items.map(item=>(
-                <tr key={item.id} className="hover:bg-blue-50/20">
-                  <td className="table-td font-mono text-xs font-semibold text-blue-800 bg-white border-r border-gray-100" style={{position:'sticky',left:0,minWidth:COL_VM}}>
+                <tr key={item.id} className={`hover:bg-blue-50/20 ${selected.has(item.id)?'bg-blue-50':''}`}>
+                  {canWrite && <td className="table-td bg-white px-2 w-8" style={{position:'sticky',left:0}} onClick={e=>e.stopPropagation()}><input type="checkbox" checked={selected.has(item.id)} onChange={()=>toggleSelect(item.id)} className="accent-blue-600"/></td>}
+                  <td className="table-td font-mono text-xs font-semibold text-blue-800 bg-white border-r border-gray-100" style={{position:'sticky',left:canWrite?32:0,minWidth:COL_VM}}>
                     {!isBlankLike(item.vm_name||item.asset_name)?<button onClick={()=>navigate(`/ext-assets/${item.id}`)} className="hover:underline text-indigo-700 text-left w-full">{displayText(item.vm_name||item.asset_name)}</button>:<span className="text-gray-400">-</span>}
                   </td>
-                  <td className="table-td font-mono text-xs bg-white border-r border-gray-100" style={{position:'sticky',left:COL_VM,minWidth:COL_IP}}>
+                  <td className="table-td font-mono text-xs bg-white border-r border-gray-100" style={{position:'sticky',left:(canWrite?32:0)+COL_VM,minWidth:COL_IP}}>
                     {!isBlankLike(item.ip_address)?<button onClick={()=>navigate(`/ext-assets/${item.id}`)} className="hover:underline text-indigo-700 font-medium">{displayText(item.ip_address)}</button>:<span className="text-gray-400">-</span>}
                   </td>
                   {colConfig.filter(c=>c.visible&&c.key!=='actions').map(c=>{

@@ -309,6 +309,23 @@ router.put('/:id', auth, requireWrite, async (req,res) => {
   }
 });
 
+// DELETE /api/extended-inventory/bulk
+router.delete('/bulk', auth, requireWrite, async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(Boolean) : [];
+    if (!ids.length) return res.status(400).json({ error: 'ids array required' });
+    let deleted = 0;
+    for (const id of ids) {
+      const { rows } = await extPool.query('SELECT * FROM items WHERE id=$1', [id]);
+      if (!rows.length) continue;
+      await saveToDeletedItems('extended_inventory', rows[0].id, rows[0], req.user?.username);
+      await extPool.query('DELETE FROM items WHERE id=$1', [id]);
+      deleted++;
+    }
+    res.json({ deleted });
+  } catch { res.status(500).json({ error: 'Server error' }); }
+});
+
 router.delete('/:id', auth, requireWrite, async (req, res) => {
   try {
     const { rows } = await extPool.query('SELECT * FROM items WHERE id=$1', [req.params.id]);

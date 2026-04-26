@@ -3,7 +3,7 @@ const pool = require('../config/database');
 const { auth, requireWrite } = require('../middleware/auth');
 const { writeAuditLog } = require('../services/audit');
 
-const VALID_SCOPES = new Set(['asset', 'ext', 'report']);
+const VALID_SCOPES = new Set(['asset', 'ext', 'report', 'beijing']);
 
 function normalizeBool(v) {
   return v === true || v === 'true' || v === 1 || v === '1';

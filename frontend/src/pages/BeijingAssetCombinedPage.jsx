@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { beijingAssetsAPI, dropdownsAPI } from '../services/api';
+import { beijingAssetsAPI, dropdownsAPI, settingsAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useDeleteConfirm } from '../context/DeleteConfirmContext';
 import toast from 'react-hot-toast';
 import {
   PlusCircle, RotateCcw, Download, List, Plus,
   Search, Edit2, Trash2, ChevronLeft, ChevronRight,
-  RefreshCw, CheckCircle, AlertTriangle, Info, ArrowRight,
+  RefreshCw, CheckCircle, AlertTriangle, Info, ArrowRight, Eye, History,
 } from 'lucide-react';
 
 const BEIJING_INIT = {
@@ -227,7 +227,28 @@ function AddBeijingTab({ onSaved, editAsset, onClearEdit }) {
 const ROW_LIMIT_OPTS = [15, 30, 50, 80, 100];
 const COL_VM = 140, COL_IP = 120;
 
-function BeijingListTab({ onEdit, refreshKey }) {
+const BEIJING_COMBINED_COL_DEFAULTS = [
+  { key: 'os_hostname',   label: 'Hostname',      visible: true },
+  { key: 'asset_type',    label: 'Asset Type',    visible: true },
+  { key: 'os',            label: 'OS',            visible: true },
+  { key: 'department',    label: 'Department',    visible: true },
+  { key: 'location',      label: 'Location',      visible: true },
+  { key: 'serial_number', label: 'Serial No.',    visible: true },
+  { key: 'status',        label: 'Status',        visible: true },
+  { key: 'migrated_by',   label: 'Migrated By',   visible: true },
+];
+
+function mergeCombinedColConfig(saved) {
+  if (!saved || !saved.length) return BEIJING_COMBINED_COL_DEFAULTS;
+  const savedMap = Object.fromEntries(saved.map((s, i) => [s.key, { ...s, order: i }]));
+  return BEIJING_COMBINED_COL_DEFAULTS.map((d, i) => ({
+    ...d,
+    visible: savedMap[d.key] !== undefined ? savedMap[d.key].visible : d.visible,
+    order:   savedMap[d.key] !== undefined ? savedMap[d.key].order   : 999 + i,
+  })).sort((a, b) => a.order - b.order);
+}
+
+function BeijingListTab({ onEdit, refreshKey, initialBatchFilter = '' }) {
   const { isAdmin } = useAuth();
   const { requestDelete } = useDeleteConfirm();
   const navigate = useNavigate();
@@ -245,9 +266,22 @@ function BeijingListTab({ onEdit, refreshKey }) {
   const [serverStatus, setServerStatus] = useState('');
   const [migrating,    setMigrating]    = useState(null);
   const [dropdowns,    setDropdowns]    = useState({});
+  const [batchFilter,  setBatchFilter]  = useState(initialBatchFilter);
+  const [selected,     setSelected]     = useState(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [colConfig,    setColConfig]    = useState(BEIJING_COMBINED_COL_DEFAULTS);
+  const [showColMenu,  setShowColMenu]  = useState(false);
+  const colMenuRef = useRef(null);
 
   useEffect(() => {
     dropdownsAPI.getAll().then(r => setDropdowns(r.data)).catch(() => {});
+    settingsAPI.getColumnConfig('beijing').then(r => setColConfig(mergeCombinedColConfig(r.data))).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const handler = (e) => { if (colMenuRef.current && !colMenuRef.current.contains(e.target)) setShowColMenu(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, []);
 
   const fetchAssets = useCallback(async () => {
@@ -255,19 +289,44 @@ function BeijingListTab({ onEdit, refreshKey }) {
     try {
       const res = await beijingAssetsAPI.getAll({
         page, limit, search,
-        department:    department    || undefined,
-        location:      location      || undefined,
-        asset_type:    assetType     || undefined,
-        server_status: serverStatus  || undefined,
+        department:       department    || undefined,
+        location:         location      || undefined,
+        asset_type:       assetType     || undefined,
+        server_status:    serverStatus  || undefined,
+        import_batch_id:  batchFilter   || undefined,
       });
       setAssets(res.data.assets);
       setTotal(res.data.total);
+      setSelected(new Set());
     } catch { toast.error('Failed to load Beijing Asset List'); }
     finally { setLoading(false); }
-  }, [page, limit, search, department, location, assetType, serverStatus]);
+  }, [page, limit, search, department, location, assetType, serverStatus, batchFilter]);
 
-  useEffect(() => { setPage(1); }, [search, department, location, assetType, serverStatus]); // eslint-disable-line
+  useEffect(() => { setPage(1); }, [search, department, location, assetType, serverStatus, batchFilter]); // eslint-disable-line
   useEffect(() => { fetchAssets(); }, [fetchAssets, refreshKey]);
+
+  const handleBulkDelete = async () => {
+    const ids = [...selected];
+    if (!ids.length) return;
+    if (!window.confirm(`Delete ${ids.length} selected asset${ids.length > 1 ? 's' : ''}? They will be moved to Deleted Items.`)) return;
+    setBulkDeleting(true);
+    try {
+      const r = await beijingAssetsAPI.bulkDelete(ids);
+      toast.success(`Deleted ${r.data.deleted} asset${r.data.deleted !== 1 ? 's' : ''}`);
+      fetchAssets();
+    } catch { toast.error('Bulk delete failed'); }
+    finally { setBulkDeleting(false); }
+  };
+
+  const allPageSelected = assets.length > 0 && assets.every(a => selected.has(a.id));
+  const toggleSelectAll = () => { if (allPageSelected) setSelected(new Set()); else setSelected(new Set(assets.map(a => a.id))); };
+  const toggleSelect = (id) => { setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; }); };
+
+  function toggleColumn(key) {
+    const next = colConfig.map(c => c.key === key ? { ...c, visible: !c.visible } : c);
+    setColConfig(next);
+    settingsAPI.saveColumnConfig('beijing', next).catch(() => {});
+  }
 
   const handleDelete = (a) => {
     requestDelete(a.vm_name || a.os_hostname || 'this asset', async () => {
@@ -331,7 +390,27 @@ function BeijingListTab({ onEdit, refreshKey }) {
             </select>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {isAdmin && selected.size > 0 && (
+            <button onClick={handleBulkDelete} disabled={bulkDeleting} className="btn-secondary text-xs bg-red-50 border-red-200 text-red-700 hover:bg-red-100">
+              <Trash2 size={13} />{bulkDeleting ? 'Deleting…' : `Delete ${selected.size}`}
+            </button>
+          )}
+          <div className="relative" ref={colMenuRef}>
+            <button onClick={() => setShowColMenu(v => !v)} className="btn-secondary text-xs">
+              <Eye size={13} /> Columns
+            </button>
+            {showColMenu && (
+              <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 p-3 min-w-[160px]">
+                {colConfig.map(col => (
+                  <label key={col.key} className="flex items-center gap-2 py-1 cursor-pointer text-sm text-gray-700">
+                    <input type="checkbox" checked={col.visible} onChange={() => toggleColumn(col.key)} className="accent-blue-600" />
+                    {col.label}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
           <button onClick={handleExport} disabled={exporting} className="btn-secondary text-xs">
             <Download size={13} />{exporting ? 'Exporting...' : 'Export CSV'}
           </button>
@@ -371,12 +450,18 @@ function BeijingListTab({ onEdit, refreshKey }) {
             <option value="">All Server Status</option>
             {(dropdowns.server_status || []).map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
           </select>
-          {(department || location || assetType || serverStatus) && (
+          {batchFilter && (
+            <span className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded-lg font-mono">
+              Batch: {batchFilter.slice(0, 12)}…
+              <button onClick={() => setBatchFilter('')} className="text-blue-400 hover:text-blue-600 ml-1">×</button>
+            </span>
+          )}
+          {(department || location || assetType || serverStatus || batchFilter) && (
             <button
-              onClick={() => { setDepartment(''); setLocation(''); setAssetType(''); setServerStatus(''); }}
+              onClick={() => { setDepartment(''); setLocation(''); setAssetType(''); setServerStatus(''); setBatchFilter(''); }}
               className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 border border-red-200 rounded-lg transition-colors"
             >
-              Clear
+              Clear All
             </button>
           )}
         </div>
@@ -388,18 +473,14 @@ function BeijingListTab({ onEdit, refreshKey }) {
           <table className="w-full text-sm" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
             <thead className="bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 sticky top-0 z-30">
               <tr>
+                {isAdmin && <th className="table-th bg-gray-50 dark:bg-slate-800 z-40 w-8 px-2" style={{ position: 'sticky', left: 0 }}><input type="checkbox" checked={allPageSelected} onChange={toggleSelectAll} className="accent-blue-600"/></th>}
                 <th className="table-th bg-gray-50 dark:bg-slate-800 z-40 border-r border-gray-200 dark:border-slate-700"
-                    style={{ position: 'sticky', left: 0, minWidth: COL_VM }}>VM Name</th>
+                    style={{ position: 'sticky', left: isAdmin ? 32 : 0, minWidth: COL_VM }}>VM Name</th>
                 <th className="table-th bg-gray-50 dark:bg-slate-800 z-40 border-r border-gray-200 dark:border-slate-700"
-                    style={{ position: 'sticky', left: COL_VM, minWidth: COL_IP }}>IP Address</th>
-                <th className="table-th bg-gray-50 dark:bg-slate-800">Hostname</th>
-                <th className="table-th bg-gray-50 dark:bg-slate-800">Asset Type</th>
-                <th className="table-th bg-gray-50 dark:bg-slate-800">OS</th>
-                <th className="table-th bg-gray-50 dark:bg-slate-800">Department</th>
-                <th className="table-th bg-gray-50 dark:bg-slate-800">Location</th>
-                <th className="table-th bg-gray-50 dark:bg-slate-800">Serial No.</th>
-                <th className="table-th bg-gray-50 dark:bg-slate-800">Status</th>
-                <th className="table-th bg-gray-50 dark:bg-slate-800">Migrated By</th>
+                    style={{ position: 'sticky', left: (isAdmin ? 32 : 0) + COL_VM, minWidth: COL_IP }}>IP Address</th>
+                {colConfig.filter(c => c.visible).map(c => (
+                  <th key={c.key} className="table-th bg-gray-50 dark:bg-slate-800">{c.label}</th>
+                ))}
                 <th className="table-th bg-gray-50 dark:bg-slate-800 text-center">Actions</th>
               </tr>
             </thead>
@@ -407,53 +488,67 @@ function BeijingListTab({ onEdit, refreshKey }) {
               {loading ? (
                 Array(5).fill(0).map((_, i) => (
                   <tr key={i} className="animate-pulse">
-                    <td className="table-td bg-white dark:bg-slate-900" style={{ position: 'sticky', left: 0 }}>
+                    {isAdmin && <td className="table-td bg-white dark:bg-slate-900 w-8" style={{ position: 'sticky', left: 0 }}><div className="h-4 bg-gray-100 dark:bg-slate-700 rounded" /></td>}
+                    <td className="table-td bg-white dark:bg-slate-900" style={{ position: 'sticky', left: isAdmin ? 32 : 0 }}>
                       <div className="h-4 bg-gray-100 dark:bg-slate-700 rounded" />
                     </td>
-                    <td className="table-td bg-white dark:bg-slate-900" style={{ position: 'sticky', left: COL_VM }}>
+                    <td className="table-td bg-white dark:bg-slate-900" style={{ position: 'sticky', left: (isAdmin ? 32 : 0) + COL_VM }}>
                       <div className="h-4 bg-gray-100 dark:bg-slate-700 rounded" />
                     </td>
-                    {Array(9).fill(0).map((_, j) => (
+                    {colConfig.filter(c => c.visible).map((_, j) => (
                       <td key={j} className="table-td"><div className="h-4 bg-gray-100 dark:bg-slate-700 rounded" /></td>
                     ))}
+                    <td className="table-td"><div className="h-4 bg-gray-100 dark:bg-slate-700 rounded" /></td>
                   </tr>
                 ))
               ) : assets.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="text-center py-16 text-gray-400">
+                  <td colSpan={2 + colConfig.filter(c => c.visible).length + (isAdmin ? 2 : 1)} className="text-center py-16 text-gray-400">
                     <AlertTriangle size={20} className="mx-auto mb-2 text-amber-400" />
                     <p className="font-medium">No assets found</p>
                   </td>
                 </tr>
               ) : assets.map(a => (
-                <tr key={a.id} className={`hover:bg-blue-50/20 dark:hover:bg-blue-900/10 ${a.is_migrated ? 'opacity-60' : ''}`}>
+                <tr key={a.id} className={`hover:bg-blue-50/20 dark:hover:bg-blue-900/10 ${a.is_migrated ? 'opacity-60' : ''} ${selected.has(a.id) ? 'bg-blue-50' : ''}`}>
+                  {isAdmin && (
+                    <td className="table-td bg-white dark:bg-slate-900 w-8 px-2" style={{ position: 'sticky', left: 0 }} onClick={e => e.stopPropagation()}>
+                      <input type="checkbox" checked={selected.has(a.id)} onChange={() => toggleSelect(a.id)} className="accent-blue-600" />
+                    </td>
+                  )}
                   <td className="table-td font-mono text-xs font-semibold text-blue-800 dark:text-blue-400 bg-white dark:bg-slate-900 border-r border-gray-100 dark:border-slate-700"
-                      style={{ position: 'sticky', left: 0, minWidth: COL_VM }}>
+                      style={{ position: 'sticky', left: isAdmin ? 32 : 0, minWidth: COL_VM }}>
                     {a.vm_name
                       ? <button onClick={() => navigate(`/beijing-asset/${a.id}`)} className="hover:underline text-blue-800 dark:text-blue-400 text-left w-full">{a.vm_name}</button>
                       : <span className="text-gray-400">—</span>}
                   </td>
                   <td className="table-td font-mono text-xs bg-white dark:bg-slate-900 border-r border-gray-100 dark:border-slate-700"
-                      style={{ position: 'sticky', left: COL_VM, minWidth: COL_IP }}>
+                      style={{ position: 'sticky', left: (isAdmin ? 32 : 0) + COL_VM, minWidth: COL_IP }}>
                     <button onClick={() => navigate(`/beijing-asset/${a.id}`)} className="hover:underline text-blue-700 dark:text-blue-400 font-medium">
                       {a.ip_address}
                     </button>
                   </td>
-                  <td className="table-td font-mono text-xs text-gray-600 dark:text-slate-400 max-w-[140px] truncate">{a.os_hostname || '—'}</td>
-                  <td className="table-td text-xs text-gray-600 dark:text-slate-400">{a.asset_type || '—'}</td>
-                  <td className="table-td text-xs text-gray-600 dark:text-slate-400 whitespace-nowrap">{[a.os_type, a.os_version].filter(Boolean).join(' ') || '—'}</td>
-                  <td className="table-td text-xs text-gray-600 dark:text-slate-400">{a.department || '—'}</td>
-                  <td className="table-td text-xs text-gray-600 dark:text-slate-400">{a.location || '—'}</td>
-                  <td className="table-td font-mono text-xs text-gray-500 dark:text-slate-500">{a.serial_number || '—'}</td>
-                  <td className="table-td whitespace-nowrap"><MigratedBadge migrated={a.is_migrated} /></td>
-                  <td className="table-td text-xs text-gray-500 dark:text-slate-500">
-                    {a.is_migrated ? (
-                      <div>
-                        <p className="font-medium text-gray-700 dark:text-slate-300">{a.migrated_by}</p>
-                        <p className="text-gray-400">{a.migrated_at ? new Date(a.migrated_at).toLocaleDateString() : ''}</p>
-                      </div>
-                    ) : '—'}
-                  </td>
+                  {colConfig.filter(c => c.visible).map(col => {
+                    switch (col.key) {
+                      case 'os_hostname':   return <td key={col.key} className="table-td font-mono text-xs text-gray-600 dark:text-slate-400 max-w-[140px] truncate">{a.os_hostname || '—'}</td>;
+                      case 'asset_type':    return <td key={col.key} className="table-td text-xs text-gray-600 dark:text-slate-400">{a.asset_type || '—'}</td>;
+                      case 'os':            return <td key={col.key} className="table-td text-xs text-gray-600 dark:text-slate-400 whitespace-nowrap">{[a.os_type, a.os_version].filter(Boolean).join(' ') || '—'}</td>;
+                      case 'department':    return <td key={col.key} className="table-td text-xs text-gray-600 dark:text-slate-400">{a.department || '—'}</td>;
+                      case 'location':      return <td key={col.key} className="table-td text-xs text-gray-600 dark:text-slate-400">{a.location || '—'}</td>;
+                      case 'serial_number': return <td key={col.key} className="table-td font-mono text-xs text-gray-500 dark:text-slate-500">{a.serial_number || '—'}</td>;
+                      case 'status':        return <td key={col.key} className="table-td whitespace-nowrap"><MigratedBadge migrated={a.is_migrated} /></td>;
+                      case 'migrated_by':   return (
+                        <td key={col.key} className="table-td text-xs text-gray-500 dark:text-slate-500">
+                          {a.is_migrated ? (
+                            <div>
+                              <p className="font-medium text-gray-700 dark:text-slate-300">{a.migrated_by}</p>
+                              <p className="text-gray-400">{a.migrated_at ? new Date(a.migrated_at).toLocaleDateString() : ''}</p>
+                            </div>
+                          ) : '—'}
+                        </td>
+                      );
+                      default: return <td key={col.key} className="table-td text-gray-400">—</td>;
+                    }
+                  })}
                   <td className="table-td">
                     <div className="flex gap-1 justify-center">
                       {isAdmin && !a.is_migrated && (
@@ -524,13 +619,85 @@ function BeijingListTab({ onEdit, refreshKey }) {
   );
 }
 
+// ─── BATCH HISTORY TAB ───────────────────────────────────────────────────────
+function BatchHistoryTab({ onFilterByBatch }) {
+  const [batches,  setBatches]  = useState([]);
+  const [loading,  setLoading]  = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    beijingAssetsAPI.getBatches()
+      .then(r => setBatches(r.data.batches || []))
+      .catch(() => toast.error('Failed to load batch history'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return (
+    <div className="card py-16 text-center text-gray-400">
+      <RefreshCw size={20} className="animate-spin mx-auto mb-2" />Loading batch history…
+    </div>
+  );
+
+  if (!batches.length) return (
+    <div className="card py-16 text-center text-gray-400">
+      <AlertTriangle size={20} className="mx-auto mb-2 text-amber-400" />
+      No import batches found. Import assets to see batch history.
+    </div>
+  );
+
+  return (
+    <div className="card overflow-hidden">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="bg-gray-50 border-b border-gray-200">
+            <th className="px-4 py-3 text-left font-semibold text-gray-600">Batch ID</th>
+            <th className="px-4 py-3 text-left font-semibold text-gray-600">Import Source</th>
+            <th className="px-4 py-3 text-left font-semibold text-gray-600">Total Assets</th>
+            <th className="px-4 py-3 text-left font-semibold text-gray-600">Migrated</th>
+            <th className="px-4 py-3 text-left font-semibold text-gray-600">Imported At</th>
+            <th className="px-4 py-3 text-left font-semibold text-gray-600">Submitted By</th>
+            <th className="px-4 py-3 w-24 text-center font-semibold text-gray-600">Action</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {batches.map(b => (
+            <tr key={b.import_batch_id} className="hover:bg-gray-50 transition-colors">
+              <td className="px-4 py-2.5 font-mono text-xs text-blue-700">{b.import_batch_id}</td>
+              <td className="px-4 py-2.5 text-xs text-gray-600 max-w-[200px] truncate">{b.import_source || '—'}</td>
+              <td className="px-4 py-2.5 text-sm font-medium text-gray-800">{b.total_assets}</td>
+              <td className="px-4 py-2.5">
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${b.migrated > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                  {b.migrated}
+                </span>
+              </td>
+              <td className="px-4 py-2.5 text-xs text-gray-500 whitespace-nowrap">
+                {b.imported_at ? new Date(b.imported_at).toLocaleString() : '—'}
+              </td>
+              <td className="px-4 py-2.5 text-xs text-gray-600">{b.submitted_by || '—'}</td>
+              <td className="px-4 py-2.5 text-center">
+                <button
+                  onClick={() => onFilterByBatch(b.import_batch_id)}
+                  className="px-2 py-1 text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg font-medium transition-colors"
+                >
+                  View Assets
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ─── COMBINED PAGE ────────────────────────────────────────────────────────────
 export default function BeijingAssetCombinedPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get('tab') || 'list';
-  const [activeTab,  setActiveTab]  = useState(requestedTab);
-  const [editAsset,  setEditAsset]  = useState(null);
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [activeTab,   setActiveTab]   = useState(requestedTab);
+  const [editAsset,   setEditAsset]   = useState(null);
+  const [refreshKey,  setRefreshKey]  = useState(0);
+  const [listBatch,   setListBatch]   = useState('');
 
   const switchTab = (tab) => {
     setActiveTab(tab);
@@ -548,9 +715,15 @@ export default function BeijingAssetCombinedPage() {
     switchTab('list');
   };
 
+  const handleFilterByBatch = (batchId) => {
+    setListBatch(batchId);
+    switchTab('list');
+  };
+
   const TABS = [
-    { key: 'add',  label: 'Add New Asset',      icon: Plus },
-    { key: 'list', label: 'Beijing Asset List',  icon: List },
+    { key: 'add',     label: 'Add New Asset',      icon: Plus    },
+    { key: 'list',    label: 'Beijing Asset List',  icon: List    },
+    { key: 'batches', label: 'Batch History',       icon: History },
   ];
 
   return (
@@ -588,9 +761,14 @@ export default function BeijingAssetCombinedPage() {
       )}
       {activeTab === 'list' && (
         <BeijingListTab
+          key={listBatch}
           onEdit={handleEdit}
           refreshKey={refreshKey}
+          initialBatchFilter={listBatch}
         />
+      )}
+      {activeTab === 'batches' && (
+        <BatchHistoryTab onFilterByBatch={handleFilterByBatch} />
       )}
     </div>
   );
