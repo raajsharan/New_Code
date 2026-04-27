@@ -31,11 +31,20 @@ const STANDARD_GROUPS = [
   { group: 'Notes', fields: [
     { key: 'additional_remarks', label: 'Additional Remarks', type: 'textbox' },
   ]},
-  { group: 'Migration Tracking (auto)', fields: [
-    { key: 'is_migrated',       label: 'Is Migrated',       type: 'toggle',  note: 'Set automatically on migration' },
-    { key: 'migrated_by',       label: 'Migrated By',       type: 'textbox', note: 'Auto-populated' },
-    { key: 'migrated_at',       label: 'Migrated At',       type: 'textbox', note: 'Auto-populated' },
-    { key: 'migration_comment', label: 'Migration Comment', type: 'textbox' },
+  { group: 'Agent & Patching', fields: [
+    { key: 'me_installed_status',      label: 'ManageEngine Installed', type: 'toggle'  },
+    { key: 'tenable_installed_status', label: 'Tenable Installed',      type: 'toggle'  },
+    { key: 'patching_type',            label: 'Patching Type',          type: 'textbox' },
+    { key: 'server_patch_type',        label: 'Server Patch Type',      type: 'textbox' },
+    { key: 'patching_schedule',        label: 'Patching Schedule',      type: 'textbox' },
+  ]},
+  { group: 'Host Details & Credentials', fields: [
+    { key: 'idrac_enabled',  label: 'iDRAC Enabled',  type: 'toggle'  },
+    { key: 'idrac_ip',       label: 'iDRAC IP',        type: 'textbox' },
+    { key: 'oem_status',     label: 'OME Status',      type: 'textbox' },
+    { key: 'hosted_ip',      label: 'Hosted IP',       type: 'textbox' },
+    { key: 'asset_username', label: 'Asset Username',  type: 'textbox' },
+    { key: 'asset_password', label: 'Asset Password',  type: 'textbox', note: 'Stored encrypted' },
   ]},
 ];
 
