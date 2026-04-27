@@ -515,6 +515,8 @@ function AssetListTab({ onEdit, refreshKey }) {
   const [dropdowns, setDropdowns] = useState({});
   const [customFields, setCustomFields] = useState([]);
   const [colConfig, setColConfig]  = useState(ASSET_COL_DEFAULTS);
+  const [showColMenu, setShowColMenu] = useState(false);
+  const colMenuRef = useRef(null);
   const [filters, setFilters]     = useState({search:'',location:'',department:'',server_status:'',asset_type:''});
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkSubmitting, setBulkSubmitting] = useState(false);
@@ -558,8 +560,13 @@ function AssetListTab({ onEdit, refreshKey }) {
 
   useEffect(()=>{fetchMeta();},[fetchMeta,configVersion]);
   useEffect(()=>{fetchAssets();},[fetchAssets,configVersion,refreshKey]);
+  useEffect(()=>{
+    const h=(e)=>{if(colMenuRef.current&&!colMenuRef.current.contains(e.target))setShowColMenu(false);};
+    document.addEventListener('mousedown',h);return()=>document.removeEventListener('mousedown',h);
+  },[]);
 
   const setFilter=(k,v)=>{setFilters(p=>({...p,[k]:v}));setPage(1);};
+  const toggleColumn=(key)=>{const next=colConfig.map(c=>c.key===key?{...c,visible:!c.visible}:c);setColConfig(next);settingsAPI.saveColumnConfig('asset',next).catch(()=>{});};
   const handleDelete=(a)=>{requestDelete(a.vm_name||a.os_hostname||'this asset',async()=>{try{await assetsAPI.delete(a.id);toast.success('Deleted');fetchAssets();}catch(err){toast.error(err.response?.data?.error||'Delete failed');}});};
   const handleBulkDelete=async()=>{const ids=[...selected];if(!ids.length)return;if(!window.confirm(`Delete ${ids.length} selected asset${ids.length>1?'s':''}? They will be moved to Deleted Items.`))return;setBulkDeleting(true);try{const r=await assetsAPI.bulkDelete(ids);toast.success(`Deleted ${r.data.deleted} asset${r.data.deleted!==1?'s':''}`);fetchAssets();}catch{toast.error('Bulk delete failed');}finally{setBulkDeleting(false);}};
   const allPageSelected=assets.length>0&&assets.every(a=>selected.has(a.id));
@@ -650,6 +657,19 @@ function AssetListTab({ onEdit, refreshKey }) {
         <div className="flex gap-2 flex-wrap">
           {canWrite && selected.size > 0 && <button onClick={handleBulkDelete} disabled={bulkDeleting} className="btn-secondary text-xs bg-red-50 border-red-200 text-red-700 hover:bg-red-100"><Trash2 size={13}/>{bulkDeleting?'Deleting…':`Delete ${selected.size}`}</button>}
           {canBulkUpdate && <button onClick={()=>setShowBulkModal(true)} className="btn-secondary text-xs"><PlusCircle size={13}/> Bulk Update</button>}
+          <div className="relative" ref={colMenuRef}>
+            <button onClick={()=>setShowColMenu(v=>!v)} className="btn-secondary text-xs"><Eye size={13}/> Columns</button>
+            {showColMenu && (
+              <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 p-3 min-w-[160px]">
+                {colConfig.map(col=>(
+                  <label key={col.key} className="flex items-center gap-2 py-1 cursor-pointer text-sm text-gray-700">
+                    <input type="checkbox" checked={col.visible} onChange={()=>toggleColumn(col.key)} className="accent-blue-600"/>
+                    {col.label}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
           <button onClick={handleExport} disabled={exporting} className="btn-secondary text-xs"><Download size={13}/>{exporting?'Exporting...':'Export CSV'}</button>
           <button onClick={fetchAssets} className="btn-secondary text-xs"><RefreshCw size={13}/> Refresh</button>
         </div>

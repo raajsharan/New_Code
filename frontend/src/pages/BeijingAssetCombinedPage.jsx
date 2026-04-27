@@ -563,50 +563,22 @@ function BeijingListTab({ onEdit, refreshKey, initialBatchFilter = '' }) {
       </div>
 
       {/* Filters */}
-      <div className="card mb-4 space-y-3">
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1 max-w-sm">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              className="input-field pl-8"
-              placeholder="VM name, hostname, IP, dept…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-          </div>
+      <div className="card mb-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+          <div className="relative xl:col-span-2"><Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/><input className="input-field pl-8" placeholder="VM name, hostname, IP, dept…" value={search} onChange={e => setSearch(e.target.value)}/></div>
+          <select className="input-field" value={location} onChange={e => setLocation(e.target.value)}><option value="">All Locations</option>{(dropdowns.locations||[]).map(l=><option key={l.id} value={l.name}>{l.name}</option>)}</select>
+          <select className="input-field" value={department} onChange={e => setDepartment(e.target.value)}><option value="">All Departments</option>{(dropdowns.departments||[]).map(d=><option key={d.id} value={d.name}>{d.name}</option>)}</select>
+          <select className="input-field" value={serverStatus} onChange={e => setServerStatus(e.target.value)}><option value="">All Statuses</option>{(dropdowns.server_status||[]).map(s=><option key={s.id} value={s.name}>{s.name}</option>)}</select>
+          <select className="input-field" value={assetType} onChange={e => setAssetType(e.target.value)}><option value="">All Types</option>{(dropdowns.asset_types||[]).map(t=><option key={t.id} value={t.name}>{t.name}</option>)}</select>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <select className="input-field py-1 text-xs" value={department} onChange={e => setDepartment(e.target.value)}>
-            <option value="">All Departments</option>
-            {(dropdowns.departments || []).map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
-          </select>
-          <select className="input-field py-1 text-xs" value={location} onChange={e => setLocation(e.target.value)}>
-            <option value="">All Locations</option>
-            {(dropdowns.locations || []).map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
-          </select>
-          <select className="input-field py-1 text-xs" value={assetType} onChange={e => setAssetType(e.target.value)}>
-            <option value="">All Asset Types</option>
-            {(dropdowns.asset_types || []).map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
-          </select>
-          <select className="input-field py-1 text-xs" value={serverStatus} onChange={e => setServerStatus(e.target.value)}>
-            <option value="">All Server Status</option>
-            {(dropdowns.server_status || []).map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-          </select>
-          {batchFilter && (
+        {batchFilter && (
+          <div className="mt-2">
             <span className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded-lg font-mono">
               Batch: {batchFilter.slice(0, 12)}…
               <button onClick={() => setBatchFilter('')} className="text-blue-400 hover:text-blue-600 ml-1">×</button>
             </span>
-          )}
-          {(department || location || assetType || serverStatus || batchFilter) && (
-            <button
-              onClick={() => { setDepartment(''); setLocation(''); setAssetType(''); setServerStatus(''); setBatchFilter(''); }}
-              className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 border border-red-200 rounded-lg transition-colors"
-            >
-              Clear All
-            </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Table */}
