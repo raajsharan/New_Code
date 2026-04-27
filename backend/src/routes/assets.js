@@ -856,9 +856,6 @@ async function checkAssetUpdateNeedByIP(importRow) {
 function basicAssetImportValidation(row) {
   const errors = [];
   if (!normalizeImportCell(row.ip_address)) errors.push('Missing IP Address');
-  if (!normalizeImportCell(row.vm_name) && !normalizeImportCell(row.os_hostname)) {
-    errors.push('Missing VM Name / Hostname');
-  }
   return errors;
 }
 
