@@ -375,17 +375,29 @@ const ROW_LIMIT_OPTS = [15, 30, 50, 80, 100];
 const COL_VM = 140, COL_IP = 120;
 
 const BEIJING_COMBINED_COL_DEFAULTS = [
-  { key: 'os_hostname',        label: 'Hostname',       visible: true  },
-  { key: 'asset_type',         label: 'Asset Type',     visible: true  },
-  { key: 'os',                 label: 'OS',             visible: true  },
-  { key: 'department',         label: 'Department',     visible: true  },
-  { key: 'location',           label: 'Location',       visible: true  },
-  { key: 'server_status',      label: 'Server Status',  visible: true  },
-  { key: 'eol_status',         label: 'EOL Status',     visible: false },
-  { key: 'patching_type',      label: 'Patching Type',  visible: false },
-  { key: 'me_installed',       label: 'ME Agent',       visible: false },
-  { key: 'tenable_installed',  label: 'Tenable',        visible: false },
-  { key: 'serial_number',      label: 'Serial No.',     visible: false },
+  { key: 'os_hostname',        label: 'Hostname',         visible: true  },
+  { key: 'asset_type',         label: 'Asset Type',       visible: true  },
+  { key: 'os',                 label: 'OS',               visible: true  },
+  { key: 'os_version',         label: 'OS Version',       visible: false },
+  { key: 'department',         label: 'Dept',             visible: true  },
+  { key: 'location',           label: 'Location',         visible: true  },
+  { key: 'assigned_user',      label: 'Assigned User',    visible: false },
+  { key: 'asset_tag',          label: 'Asset Tag',        visible: false },
+  { key: 'server_status',      label: 'Status',           visible: true  },
+  { key: 'eol_status',         label: 'EOL',              visible: false },
+  { key: 'patching_type',      label: 'Patch Type',       visible: false },
+  { key: 'server_patch_type',  label: 'Ser. Patch Type',  visible: false },
+  { key: 'patching_schedule',  label: 'Schedule',         visible: false },
+  { key: 'me_installed',       label: 'ME',               visible: false },
+  { key: 'tenable_installed',  label: 'Tenable',          visible: false },
+  { key: 'serial_number',      label: 'Serial',           visible: false },
+  { key: 'idrac',              label: 'iDRAC',            visible: false },
+  { key: 'oem_status',         label: 'OME',              visible: false },
+  { key: 'hosted_ip',          label: 'Hosted IP',        visible: false },
+  { key: 'business_purpose',   label: 'Business Purpose', visible: false },
+  { key: 'asset_username',     label: 'Username',         visible: false },
+  { key: 'asset_password',     label: 'Password',         visible: false },
+  { key: 'additional_remarks', label: 'Add. Remark',      visible: false },
 ];
 
 function mergeCombinedColConfig(saved) {
@@ -661,9 +673,12 @@ function BeijingListTab({ onEdit, refreshKey, initialBatchFilter = '' }) {
                     switch (col.key) {
                       case 'os_hostname':       return <td key={col.key} className="table-td font-mono text-xs text-gray-600 dark:text-slate-400 max-w-[140px] truncate">{a.os_hostname || '—'}</td>;
                       case 'asset_type':        return <td key={col.key} className="table-td text-xs text-gray-600 dark:text-slate-400">{a.asset_type || '—'}</td>;
-                      case 'os':                return <td key={col.key} className="table-td text-xs text-gray-600 dark:text-slate-400 whitespace-nowrap">{[a.os_type, a.os_version].filter(Boolean).join(' ') || '—'}</td>;
+                      case 'os':                return <td key={col.key} className="table-td text-xs text-gray-600 dark:text-slate-400 whitespace-nowrap">{a.os_type || '—'}</td>;
+                      case 'os_version':        return <td key={col.key} className="table-td text-xs text-gray-600 dark:text-slate-400">{a.os_version || '—'}</td>;
                       case 'department':        return <td key={col.key} className="table-td text-xs text-gray-600 dark:text-slate-400">{a.department || '—'}</td>;
                       case 'location':          return <td key={col.key} className="table-td text-xs text-gray-600 dark:text-slate-400">{a.location || '—'}</td>;
+                      case 'assigned_user':     return <td key={col.key} className="table-td text-xs text-gray-600 dark:text-slate-400">{a.assigned_user || '—'}</td>;
+                      case 'asset_tag':         return <td key={col.key} className="table-td font-mono text-xs text-gray-600 dark:text-slate-400">{a.asset_tag || '—'}</td>;
                       case 'server_status': {
                         const ssCls = { Alive: 'bg-green-100 text-green-700', 'Powered Off': 'bg-orange-100 text-orange-700', 'Not Alive': 'bg-red-100 text-red-700' }[a.server_status] || 'bg-gray-100 text-gray-500';
                         return <td key={col.key} className="table-td whitespace-nowrap">{a.server_status ? <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ssCls}`}>{a.server_status}</span> : <span className="text-gray-400">—</span>}</td>;
@@ -673,9 +688,18 @@ function BeijingListTab({ onEdit, refreshKey, initialBatchFilter = '' }) {
                         return <td key={col.key} className="table-td whitespace-nowrap">{a.eol_status ? <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${eolCls}`}>{a.eol_status}</span> : <span className="text-gray-400">—</span>}</td>;
                       }
                       case 'patching_type':     return <td key={col.key} className="table-td text-xs text-gray-600 dark:text-slate-400">{a.patching_type || '—'}</td>;
-                      case 'me_installed':      return <td key={col.key} className="table-td text-xs whitespace-nowrap">{a.me_installed_status ? <span className="text-green-700 font-medium">✓ Installed</span> : <span className="text-gray-400">—</span>}</td>;
-                      case 'tenable_installed': return <td key={col.key} className="table-td text-xs whitespace-nowrap">{a.tenable_installed_status ? <span className="text-green-700 font-medium">✓ Installed</span> : <span className="text-gray-400">—</span>}</td>;
+                      case 'server_patch_type': return <td key={col.key} className="table-td text-xs text-gray-600 dark:text-slate-400">{a.server_patch_type || '—'}</td>;
+                      case 'patching_schedule': return <td key={col.key} className="table-td text-xs text-gray-600 dark:text-slate-400">{a.patching_schedule || '—'}</td>;
+                      case 'me_installed':      return <td key={col.key} className="table-td text-xs whitespace-nowrap">{a.me_installed_status ? <span className="text-green-700 font-medium">✓ Yes</span> : <span className="text-gray-400">—</span>}</td>;
+                      case 'tenable_installed': return <td key={col.key} className="table-td text-xs whitespace-nowrap">{a.tenable_installed_status ? <span className="text-green-700 font-medium">✓ Yes</span> : <span className="text-gray-400">—</span>}</td>;
                       case 'serial_number':     return <td key={col.key} className="table-td font-mono text-xs text-gray-500 dark:text-slate-500">{a.serial_number || '—'}</td>;
+                      case 'idrac':             return <td key={col.key} className="table-td text-xs whitespace-nowrap">{a.idrac_enabled ? <span className="text-blue-700 font-mono">{a.idrac_ip || 'Enabled'}</span> : <span className="text-gray-400">—</span>}</td>;
+                      case 'oem_status':        return <td key={col.key} className="table-td text-xs text-gray-600 dark:text-slate-400">{a.oem_status || '—'}</td>;
+                      case 'hosted_ip':         return <td key={col.key} className="table-td font-mono text-xs text-gray-600 dark:text-slate-400">{a.hosted_ip || '—'}</td>;
+                      case 'business_purpose':  return <td key={col.key} className="table-td text-xs text-gray-600 dark:text-slate-400 max-w-[160px] truncate">{a.business_purpose || '—'}</td>;
+                      case 'asset_username':    return <td key={col.key} className="table-td font-mono text-xs text-gray-600 dark:text-slate-400">{a.asset_username || '—'}</td>;
+                      case 'asset_password':    return <td key={col.key} className="table-td text-xs text-gray-400 tracking-widest">{a.asset_password ? '••••••••' : '—'}</td>;
+                      case 'additional_remarks':return <td key={col.key} className="table-td text-xs text-gray-500 dark:text-slate-500 max-w-[180px] truncate">{a.additional_remarks || '—'}</td>;
                       default: return <td key={col.key} className="table-td text-gray-400">—</td>;
                     }
                   })}

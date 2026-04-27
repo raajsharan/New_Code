@@ -9,42 +9,44 @@ import { Globe, Plus, Edit2, Trash2, Save, X, Info, Lock } from 'lucide-react';
 // ── Standard Beijing Asset built-in fields (read-only reference) ──────────────
 const STANDARD_GROUPS = [
   { group: 'Basic Information', fields: [
-    { key: 'vm_name',       label: 'VM Name',       type: 'textbox'  },
-    { key: 'os_hostname',   label: 'OS Hostname',   type: 'textbox'  },
-    { key: 'ip_address',    label: 'IP Address',    type: 'textbox',  note: 'Required, must be unique' },
-    { key: 'asset_type',    label: 'Asset Type',    type: 'textbox'  },
-    { key: 'os_type',       label: 'OS Type',       type: 'textbox'  },
-    { key: 'os_version',    label: 'OS Version',    type: 'textbox'  },
+    { key: 'vm_name',       label: 'VM Name',     type: 'textbox', note: 'Required' },
+    { key: 'ip_address',    label: 'IP Address',  type: 'textbox', note: 'Required, must be unique' },
+    { key: 'os_hostname',   label: 'Hostname',    type: 'textbox' },
+    { key: 'asset_type',    label: 'Asset Type',  type: 'textbox' },
+    { key: 'os_type',       label: 'OS',          type: 'textbox' },
+    { key: 'os_version',    label: 'OS Version',  type: 'textbox' },
   ]},
   { group: 'Ownership', fields: [
-    { key: 'assigned_user',    label: 'Assigned User',    type: 'textbox' },
-    { key: 'department',       label: 'Department',       type: 'textbox' },
+    { key: 'department',       label: 'Dept',             type: 'textbox' },
     { key: 'location',         label: 'Location',         type: 'textbox' },
+    { key: 'assigned_user',    label: 'Assigned User',    type: 'textbox' },
+    { key: 'asset_tag',        label: 'Asset Tag',        type: 'textbox' },
+    { key: 'serial_number',    label: 'Serial',           type: 'textbox' },
     { key: 'business_purpose', label: 'Business Purpose', type: 'textbox' },
+    { key: 'additional_remarks', label: 'Add. Remark',    type: 'textbox' },
   ]},
-  { group: 'Status & Identity', fields: [
-    { key: 'server_status',    label: 'Server Status',   type: 'textbox' },
-    { key: 'eol_status',       label: 'EOL Status',      type: 'textbox' },
-    { key: 'serial_number',    label: 'Serial Number',   type: 'textbox' },
-    { key: 'asset_tag',        label: 'Asset Tag',       type: 'textbox' },
+  { group: 'Status & EOL', fields: [
+    { key: 'server_status', label: 'Status',  type: 'textbox' },
+    { key: 'eol_status',    label: 'EOL',     type: 'textbox' },
   ]},
-  { group: 'Notes', fields: [
-    { key: 'additional_remarks', label: 'Additional Remarks', type: 'textbox' },
+  { group: 'Agent Status', fields: [
+    { key: 'me_installed_status',      label: 'ME',      type: 'toggle' },
+    { key: 'tenable_installed_status', label: 'Tenable', type: 'toggle' },
   ]},
-  { group: 'Agent & Patching', fields: [
-    { key: 'me_installed_status',      label: 'ManageEngine Installed', type: 'toggle'  },
-    { key: 'tenable_installed_status', label: 'Tenable Installed',      type: 'toggle'  },
-    { key: 'patching_type',            label: 'Patching Type',          type: 'textbox' },
-    { key: 'server_patch_type',        label: 'Server Patch Type',      type: 'textbox' },
-    { key: 'patching_schedule',        label: 'Patching Schedule',      type: 'textbox' },
+  { group: 'Patching', fields: [
+    { key: 'patching_type',     label: 'Patch Type',      type: 'textbox' },
+    { key: 'server_patch_type', label: 'Ser. Patch Type', type: 'textbox' },
+    { key: 'patching_schedule', label: 'Schedule',        type: 'textbox' },
   ]},
-  { group: 'Host Details & Credentials', fields: [
-    { key: 'idrac_enabled',  label: 'iDRAC Enabled',  type: 'toggle'  },
-    { key: 'idrac_ip',       label: 'iDRAC IP',        type: 'textbox' },
-    { key: 'oem_status',     label: 'OME Status',      type: 'textbox' },
-    { key: 'hosted_ip',      label: 'Hosted IP',       type: 'textbox' },
-    { key: 'asset_username', label: 'Asset Username',  type: 'textbox' },
-    { key: 'asset_password', label: 'Asset Password',  type: 'textbox', note: 'Stored encrypted' },
+  { group: 'Host Details', fields: [
+    { key: 'idrac_enabled',  label: 'iDRAC',     type: 'toggle'  },
+    { key: 'idrac_ip',       label: 'iDRAC IP',  type: 'textbox' },
+    { key: 'oem_status',     label: 'OME',       type: 'textbox' },
+    { key: 'hosted_ip',      label: 'Hosted IP', type: 'textbox' },
+  ]},
+  { group: 'Credentials', fields: [
+    { key: 'asset_username', label: 'Username', type: 'textbox' },
+    { key: 'asset_password', label: 'Password', type: 'textbox', note: 'Stored as-is; use with care' },
   ]},
 ];
 
@@ -169,10 +171,22 @@ export default function BeijingAssetFieldsPage() {
     setLoading(true);
     try {
       const r = await beijingAssetsAPI.getCustomFields();
-      setCustomFields(r.data || []);
-      setDbReady(true);
+      if (Array.isArray(r.data)) {
+        setCustomFields(r.data);
+        setDbReady(true);
+      } else {
+        setDbReady(false);
+      }
     } catch (e) {
-      if (e?.response?.status === 500) setDbReady(false);
+      const msg = e?.response?.data?.error || '';
+      // Only show "DB not ready" when the table genuinely doesn't exist
+      if (e?.response?.status === 500 && (msg.includes('does not exist') || msg.includes('42P01'))) {
+        setDbReady(false);
+      } else if (e?.response?.status === 500) {
+        // Other 500 (e.g. route mismatch before restart) — don't show misleading banner
+        setCustomFields([]);
+        setDbReady(true);
+      }
     } finally { setLoading(false); }
   }, []);
 
