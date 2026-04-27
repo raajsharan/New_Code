@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { beijingAssetsAPI, dropdownsAPI, settingsAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useDeleteConfirm } from '../context/DeleteConfirmContext';
+import AssetTagWidget from '../components/AssetTagWidget';
 import toast from 'react-hot-toast';
 import {
   PlusCircle, RotateCcw, Download, List, Plus,
@@ -62,12 +63,13 @@ function SectionTitle({ title }) {
 function AddBeijingTab({ onSaved, editAsset, onClearEdit }) {
   const { isAdmin } = useAuth();
   const [form, setForm]         = useState(BEIJING_INIT);
-  const [loading, setLoading]   = useState(false);
-  const [dupState, setDupState] = useState({ ip: null });
-  const [checking, setChecking] = useState({ ip: false });
-  const [showPw, setShowPw]     = useState(false);
-  const [dropdowns, setDropdowns]       = useState({});
-  const [customFields, setCustomFields] = useState([]);
+  const [loading, setLoading]       = useState(false);
+  const [dupState, setDupState]     = useState({ ip: null });
+  const [checking, setChecking]     = useState({ ip: false });
+  const [showPw, setShowPw]         = useState(false);
+  const [tagValidation, setTagValidation] = useState(null);
+  const [dropdowns, setDropdowns]         = useState({});
+  const [customFields, setCustomFields]   = useState([]);
   const ipTimer = useRef(null);
 
   useEffect(() => {
@@ -103,6 +105,7 @@ function AddBeijingTab({ onSaved, editAsset, onClearEdit }) {
     e.preventDefault();
     if (dupState.ip)             { toast.error('Fix duplicate IP'); return; }
     if (!form.ip_address.trim()) { toast.error('IP address is required'); return; }
+    if (tagValidation)           { toast.error('Fix asset tag: ' + tagValidation); return; }
     setLoading(true);
     try {
       if (editAsset) {
@@ -218,9 +221,17 @@ function AddBeijingTab({ onSaved, editAsset, onClearEdit }) {
             <Field label="Business Purpose">
               <input className="input-field" value={form.business_purpose} onChange={e => set('business_purpose', e.target.value)} placeholder="Web server" />
             </Field>
-            <Field label="Asset Tag">
-              <input className="input-field" value={form.asset_tag} onChange={e => set('asset_tag', e.target.value)} />
-            </Field>
+            <div className="col-span-full">
+              <AssetTagWidget
+                departmentId={(dropdowns.departments || []).find(d => d.name === form.department)?.id}
+                departments={dropdowns.departments || []}
+                value={form.asset_tag}
+                onChange={tag => set('asset_tag', tag)}
+                onValidation={setTagValidation}
+                excludeAssetId={editAsset?.id}
+                disabled={!isAdmin}
+              />
+            </div>
             <Field label="Serial Number">
               <input className="input-field" value={form.serial_number} onChange={e => set('serial_number', e.target.value)} />
             </Field>
@@ -520,7 +531,7 @@ function BeijingListTab({ onEdit, refreshKey, initialBatchFilter = '' }) {
               <Eye size={13} /> Columns
             </button>
             {showColMenu && (
-              <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 p-3 min-w-[160px]">
+              <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 p-3 min-w-[160px]">
                 {colConfig.map(col => (
                   <label key={col.key} className="flex items-center gap-2 py-1 cursor-pointer text-sm text-gray-700">
                     <input type="checkbox" checked={col.visible} onChange={() => toggleColumn(col.key)} className="accent-blue-600" />
