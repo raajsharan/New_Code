@@ -88,8 +88,7 @@ function shouldRunNow(prefix, frequency, hhmm, now = new Date()) {
 
 function runPgDump(dbConfig) {
   const env = { ...process.env, PGPASSWORD: dbConfig.password };
-  // --no-acl: skip GRANT/REVOKE output (requires reading pg_authid — denied for non-superusers)
-  // --no-owner: skip SET ROLE ownership commands (requires superuser)
+  // --no-acl / --no-owner: skip privilege and ownership output (require superuser to read/restore)
   const cmd = `pg_dump -h ${dbConfig.host} -p ${dbConfig.port} -U ${dbConfig.user} -d ${dbConfig.database} -F p --no-password --no-acl --no-owner`;
   return new Promise((resolve, reject) => {
     exec(cmd, { env, maxBuffer: 100 * 1024 * 1024 }, (err, stdout, stderr) => {
@@ -97,6 +96,18 @@ function runPgDump(dbConfig) {
       resolve(stdout);
     });
   });
+}
+
+// Resolve DB config for backup — prefers BACKUP_DB_USER/BACKUP_DB_PASSWORD if set,
+// so a superuser account can be used for pg_dump without changing the app's DB user.
+function getBackupDbConfig() {
+  return {
+    host:     process.env.DB_HOST          || 'localhost',
+    port:     process.env.DB_PORT          || '5432',
+    database: process.env.DB_NAME          || 'infrastructure_inventory',
+    user:     process.env.BACKUP_DB_USER   || process.env.DB_USER     || 'infra_admin',
+    password: process.env.BACKUP_DB_PASSWORD || process.env.DB_PASSWORD || '',
+  };
 }
 
 async function buildDecryptedPasswordPatch() {
@@ -273,13 +284,7 @@ async function runScheduledTasks() {
   const now = new Date();
 
   if (schedule.pg_enabled && shouldRunNow('pg', schedule.pg_frequency, schedule.pg_time, now)) {
-    const dbConfig = {
-      host: process.env.DB_HOST || 'localhost',
-      port: process.env.DB_PORT || '5432',
-      database: process.env.DB_NAME || 'infrastructure_inventory',
-      user: process.env.DB_USER || 'infra_admin',
-      password: process.env.DB_PASSWORD || '',
-    };
+    const dbConfig = getBackupDbConfig();
     try {
       const [dump, patch] = await Promise.all([runPgDump(dbConfig), buildDecryptedPasswordPatch()]);
       const fullDump = dump + patch;
@@ -373,13 +378,7 @@ router.get('/log', auth, requireAdmin, async (req, res) => {
 
 // ── POST /api/backup/pg-dump — trigger a manual PostgreSQL dump ───────────────
 router.post('/pg-dump', auth, requireAdmin, async (req, res) => {
-  const dbConfig = {
-    host:     process.env.DB_HOST     || 'localhost',
-    port:     process.env.DB_PORT     || '5432',
-    database: process.env.DB_NAME     || 'infrastructure_inventory',
-    user:     process.env.DB_USER     || 'infra_admin',
-    password: process.env.DB_PASSWORD || '',
-  };
+  const dbConfig = getBackupDbConfig();
 
   const timestamp  = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const filename   = `infra_backup_${timestamp}.sql`;
