@@ -88,7 +88,9 @@ function shouldRunNow(prefix, frequency, hhmm, now = new Date()) {
 
 function runPgDump(dbConfig) {
   const env = { ...process.env, PGPASSWORD: dbConfig.password };
-  const cmd = `pg_dump -h ${dbConfig.host} -p ${dbConfig.port} -U ${dbConfig.user} -d ${dbConfig.database} -F p --no-password`;
+  // --no-acl: skip GRANT/REVOKE output (requires reading pg_authid — denied for non-superusers)
+  // --no-owner: skip SET ROLE ownership commands (requires superuser)
+  const cmd = `pg_dump -h ${dbConfig.host} -p ${dbConfig.port} -U ${dbConfig.user} -d ${dbConfig.database} -F p --no-password --no-acl --no-owner`;
   return new Promise((resolve, reject) => {
     exec(cmd, { env, maxBuffer: 100 * 1024 * 1024 }, (err, stdout, stderr) => {
       if (err) return reject(new Error(stderr || err.message));
