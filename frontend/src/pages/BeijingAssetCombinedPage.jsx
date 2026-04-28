@@ -841,7 +841,6 @@ export default function BeijingAssetCombinedPage() {
   const TABS = [
     { key: 'add',     label: 'Add New Asset',      icon: Plus    },
     { key: 'list',    label: 'Beijing Asset List',  icon: List    },
-    { key: 'batches', label: 'Batch History',       icon: History },
   ];
 
   return (
@@ -884,9 +883,6 @@ export default function BeijingAssetCombinedPage() {
           refreshKey={refreshKey}
           initialBatchFilter={listBatch}
         />
-      )}
-      {activeTab === 'batches' && (
-        <BatchHistoryTab onFilterByBatch={handleFilterByBatch} />
       )}
     </div>
   );
