@@ -15,11 +15,23 @@ export function BrandingProvider({ children }) {
   });
   const [loaded, setLoaded] = useState(false);
 
+  const setFavicon = (url) => {
+    let link = document.querySelector("link[rel~='icon']");
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.head.appendChild(link);
+    }
+    link.href = url || '';
+    if (!url) link.remove();
+  };
+
   const fetchBranding = useCallback(async () => {
     try {
       const r = await settingsAPI.getBranding();
       setBranding(prev => ({ ...prev, ...r.data }));
       if (r.data.app_name) document.title = r.data.app_name;
+      setFavicon(r.data.logo_data || '');
     } catch {
       // keep defaults
     } finally {
@@ -34,6 +46,7 @@ export function BrandingProvider({ children }) {
     setBranding(prev => {
       const next = { ...prev, ...updates };
       if (updates.app_name) document.title = updates.app_name;
+      if ('logo_data' in updates) setFavicon(updates.logo_data || '');
       return next;
     });
   }, []);

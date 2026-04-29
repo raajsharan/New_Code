@@ -49,14 +49,20 @@ const PAGE_GROUPS = [
       { key: 'backup',              label: 'Backup & Export' },
       { key: 'email-notifications', label: 'Email Notifications' },
       { key: 'new-asset-import',    label: 'New Asset Import' },
-      { key: 'excel-smart-import',  label: 'Excel Smart Import' },
+      { key: 'excel-smart-import', label: 'Excel Smart Import', children: [
+        { key: 'excel-smart-import-asset',   label: 'Asset List' },
+        { key: 'excel-smart-import-ext',     label: 'Ext. Asset List' },
+        { key: 'excel-smart-import-beijing', label: 'Beijing Asset' },
+      ]},
       { key: 'import-audit-report', label: 'Import Audit Report' },
     ],
   },
 ];
 
-// Flat map for saving
-const ALL_PAGES = PAGE_GROUPS.flatMap(g => g.pages);
+// Flat map for saving — includes sub-permission children
+const ALL_PAGES = PAGE_GROUPS.flatMap(g =>
+  g.pages.flatMap(p => p.children ? [p, ...p.children] : [p])
+);
 
 const roleBadge = (role) => ({
   admin:     'bg-red-100 text-red-700',
@@ -194,12 +200,33 @@ export default function PasswordControlPage() {
                         <div key={group} className="mb-4 last:mb-0">
                           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">{group}</p>
                           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
-                            {pages.map(({ key, label }) => (
-                              <div key={key} className="flex items-center gap-2.5 p-2.5 bg-gray-50 rounded-lg border border-gray-100">
-                                <Toggle size="sm" checked={perms[key] !== false} onChange={v => setUserPerm(user.id, key, v)} />
-                                <span className="text-xs text-gray-700 leading-tight">{label}</span>
-                              </div>
-                            ))}
+                            {pages.map(({ key, label, children }) => {
+                              if (children) {
+                                const parentOn = perms[key] !== false;
+                                return (
+                                  <div key={key} className="col-span-full flex flex-col gap-2 p-2.5 bg-gray-50 rounded-lg border border-gray-100">
+                                    <div className="flex items-center gap-2.5">
+                                      <Toggle size="sm" checked={parentOn} onChange={v => setUserPerm(user.id, key, v)} />
+                                      <span className="text-xs font-medium text-gray-700 leading-tight">{label}</span>
+                                    </div>
+                                    <div className={`ml-6 flex flex-wrap gap-2 ${!parentOn ? 'opacity-40 pointer-events-none' : ''}`}>
+                                      {children.map(({ key: ck, label: cl }) => (
+                                        <div key={ck} className="flex items-center gap-2 px-2.5 py-1.5 bg-white rounded-md border border-gray-200">
+                                          <Toggle size="sm" checked={perms[ck] !== false} onChange={v => setUserPerm(user.id, ck, v)} />
+                                          <span className="text-xs text-gray-600">{cl}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div key={key} className="flex items-center gap-2.5 p-2.5 bg-gray-50 rounded-lg border border-gray-100">
+                                  <Toggle size="sm" checked={perms[key] !== false} onChange={v => setUserPerm(user.id, key, v)} />
+                                  <span className="text-xs text-gray-700 leading-tight">{label}</span>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       ))}

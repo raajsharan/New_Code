@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { assetsAPI, extendedInventoryAPI, beijingAssetsAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import { Download, FileSpreadsheet, Upload, CheckCircle2, AlertCircle } from 'lucide-react';
 
 const TARGETS = {
   assets: {
     label: 'Asset List',
+    permKey: 'excel-smart-import-asset',
     templateName: 'asset_import_template.csv',
     downloadTemplate: () => assetsAPI.downloadTemplate(),
     importFile: (file) => assetsAPI.importCSV(file, { import_source: 'excel-smart-import' }),
@@ -14,6 +16,7 @@ const TARGETS = {
   },
   ext: {
     label: 'Ext. Asset List',
+    permKey: 'excel-smart-import-ext',
     templateName: 'extended_inventory_template.csv',
     downloadTemplate: () => extendedInventoryAPI.downloadTemplate(),
     importFile: (file) => extendedInventoryAPI.importCSV(file, { import_source: 'excel-smart-import' }),
@@ -22,6 +25,7 @@ const TARGETS = {
   },
   beijing: {
     label: 'Beijing Asset List',
+    permKey: 'excel-smart-import-beijing',
     templateName: 'beijing_assets_template.csv',
     downloadTemplate: () => beijingAssetsAPI.downloadTemplate(),
     importFile: (file) => beijingAssetsAPI.importFile(file),
@@ -31,7 +35,18 @@ const TARGETS = {
 };
 
 export default function ExcelSmartImportPage() {
+  const { canViewPage, isAdmin } = useAuth();
   const [target, setTarget] = useState('assets');
+
+  const allowedTargets = Object.entries(TARGETS).filter(
+    ([, t]) => isAdmin || canViewPage(t.permKey)
+  );
+
+  useEffect(() => {
+    if (!allowedTargets.find(([k]) => k === target)) {
+      setTarget(allowedTargets[0]?.[0] || 'assets');
+    }
+  }, [allowedTargets, target]);
   const [file, setFile] = useState(null);
   const [previewing, setPreviewing] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -197,9 +212,9 @@ export default function ExcelSmartImportPage() {
           <div>
             <label className="block text-xs text-gray-500 mb-1">Target List</label>
             <select className="input-field" value={target} onChange={(e) => setTarget(e.target.value)}>
-              <option value="assets">Asset List</option>
-              <option value="ext">Ext. Asset List</option>
-              <option value="beijing">Beijing Asset List</option>
+              {allowedTargets.map(([key, t]) => (
+                <option key={key} value={key}>{t.label}</option>
+              ))}
             </select>
           </div>
           <div>
