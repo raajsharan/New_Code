@@ -38,7 +38,6 @@ import AuditExplorerPage from './pages/AuditExplorerPage';
 import NewAssetImportPage from './pages/NewAssetImportPage';
 import ExcelSmartImportPage from './pages/ExcelSmartImportPage';
 import ImportAuditReportPage from './pages/ImportAuditReportPage';
-import SoftwareDeploymentPage from './pages/SoftwareDeploymentPage';
 import TenableReportPage from './pages/TenableReportPage';
 import TenableImportPage from './pages/TenableImportPage';
 import BeijingAssetCombinedPage from './pages/BeijingAssetCombinedPage';
@@ -124,7 +123,6 @@ function AppRoutes() {
         <Route path="audit-explorer"                  element={<Guard adminOnly pageKey="audit-explorer"><AuditExplorerPage /></Guard>} />
         <Route path="column-config"                    element={<Guard adminOnly pageKey="column-config"><ColumnConfigPage /></Guard>} />
         <Route path="report-builder"                   element={<Guard pageKey="report-builder"><ReportBuilderPage /></Guard>} />
-        <Route path="software-deployment"              element={<Guard adminOnly pageKey="software-deployment"><SoftwareDeploymentPage /></Guard>} />
         <Route path="tenable-report" element={<Guard pageKey="tenable-report"><TenableReportPage /></Guard>} />
         <Route path="tenable-import" element={<Guard adminOnly pageKey="tenable-import"><TenableImportPage /></Guard>} />
         <Route path="beijing-asset-list" element={<Guard pageKey="beijing-asset-list"><BeijingAssetCombinedPage /></Guard>} />

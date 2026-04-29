@@ -31,7 +31,7 @@ const NAV_ICON_MAP = {
 const NAV = [
   { to: '/dashboard',          icon: LayoutDashboard, label: 'Dashboard',          key: 'dashboard' },
   { to: '/asset-list',         icon: List,            label: 'Asset List',          key: 'asset-list' },
-  { to: '/ext-asset-list',     icon: Table2,          label: 'Ext. Asset List',     key: 'extended-inventory' },
+  { to: '/ext-asset-list',     icon: Table2,          label: 'Ext. Asset List',     key: 'ext-asset-list' },
   { to: '/physical-server-list',icon: Server,         label: 'Physical Servers',    key: 'physical-assets' },
   { to: '/configuration',      icon: Settings,        label: 'Inventory Config',    key: 'configuration' },
   { to: '/report-builder',     icon: BarChart2,       label: 'Report Builder',      key: 'report-builder' },
@@ -49,7 +49,6 @@ const ADMIN_NAV = [
   { to: '/dept-range-management',        icon: Tag,        label: 'Dept. Tag Ranges',         key: 'dept-range-management' },
   { to: '/dashboard-icons',             icon: BarChart2,  label: 'Dashboard Icons',           key: 'dashboard-icons' },
   { to: '/dashboard-compliance-config', icon: Settings,   label: 'Dashboard Compliance',      key: 'dashboard-compliance-config' },
-  { to: '/software-deployment',         icon: Package,    label: 'Software Deployment',        key: 'software-deployment' },
   { to: '/backup',                      icon: Database,   label: 'Backup & Export',           key: 'backup' },
   { to: '/email-notifications',         icon: Mail,       label: 'Email Notifications',       key: 'email-notifications' },
   { to: '/audit-explorer',              icon: Search,     label: 'Audit Explorer',            key: 'audit-explorer' },
