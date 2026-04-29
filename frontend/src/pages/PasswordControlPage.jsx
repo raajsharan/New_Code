@@ -20,6 +20,7 @@ const PAGE_GROUPS = [
       { key: 'physical-assets',        label: 'Physical Server — Register / View' },
       { key: 'physical-server-list',   label: 'Physical Servers List' },
       { key: 'beijing-asset-list',     label: 'Beijing Asset List' },
+      { key: 'beijing-asset-list-add', label: 'Beijing Asset List → Add Asset tab' },
       { key: 'tenable-report',         label: 'Tenable Report' },
       { key: 'configuration',          label: 'Inventory Configuration' },
       { key: 'report-builder',         label: 'Report Builder' },

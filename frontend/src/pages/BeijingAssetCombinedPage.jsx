@@ -810,9 +810,11 @@ function BatchHistoryTab({ onFilterByBatch }) {
 
 // ─── COMBINED PAGE ────────────────────────────────────────────────────────────
 export default function BeijingAssetCombinedPage() {
+  const { canViewPage } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get('tab') || 'list';
-  const [activeTab,   setActiveTab]   = useState(requestedTab);
+  const initialTab = (requestedTab === 'add' && !canViewPage('beijing-asset-list-add')) ? 'list' : requestedTab;
+  const [activeTab,   setActiveTab]   = useState(initialTab);
   const [editAsset,   setEditAsset]   = useState(null);
   const [refreshKey,  setRefreshKey]  = useState(0);
   const [listBatch,   setListBatch]   = useState('');
@@ -853,7 +855,7 @@ export default function BeijingAssetCombinedPage() {
       </div>
 
       <div className="flex gap-1 bg-gray-100 dark:bg-slate-800 p-1 rounded-xl mb-6 w-fit">
-        {TABS.map(({ key, label, icon: Icon }) => (
+        {TABS.filter(t => t.key === 'add' ? canViewPage('beijing-asset-list-add') : true).map(({ key, label, icon: Icon }) => (
           <button
             key={key}
             onClick={() => switchTab(key)}
