@@ -36,6 +36,12 @@ function SmtpTab({ smtp, onSave }) {
     catch { toast.error('Save failed'); } finally { setSaving(false); }
   };
 
+  const handleClear = async () => {
+    setForm({ host:'', port:587, secure:false, username:'', password:'', from_name:'InfraInventory', from_email:'' });
+    try { await notificationsAPI.saveSmtp({ host:'', port:587, secure:false, username:'', password:'', from_name:'InfraInventory', from_email:'' }); await onSave(); toast.success('SMTP settings cleared'); }
+    catch { toast.error('Failed to clear settings'); }
+  };
+
   const handleTest = async () => {
     if (!testTo.includes('@')) { toast.error('Enter a valid email'); return; }
     setTesting(true);
@@ -107,6 +113,10 @@ function SmtpTab({ smtp, onSave }) {
         <div className="flex gap-3 flex-wrap">
           <button onClick={handleSave} disabled={saving} className="btn-primary">
             <Save size={14}/> {saving ? 'Saving…' : 'Save SMTP Settings'}
+          </button>
+          <button onClick={handleClear} disabled={saving}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-red-600 bg-white border border-red-300 rounded-lg hover:bg-red-50 hover:border-red-400 transition-colors disabled:opacity-50">
+            <X size={14}/> Clear Settings
           </button>
         </div>
       </div>
