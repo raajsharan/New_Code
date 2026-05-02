@@ -153,10 +153,17 @@ async function enrichRows(rows) {
   }));
 }
 
+const EXT_SORT_COLS = {
+  vm_name:'asset_name', ip_address:'ip_address', os_hostname:'os_hostname',
+  assigned_user:'assigned_user', asset_tag:'asset_tag', serial_number:'serial_number',
+  eol_status:'eol_status', submitted_by:'submitted_by', updated_at:'updated_at',
+  created_at:'created_at',
+};
+
 // GET /api/extended-inventory
 router.get('/', auth, async (req, res) => {
   try {
-    const { search, department, location, status, asset_type, server_status, page=1, limit=20 } = req.query;
+    const { search, department, location, status, asset_type, server_status, page=1, limit=20, sort_by='created_at', sort_dir='desc' } = req.query;
     const conds = [], params = [];
     let i = 1;
     if (search) {
@@ -183,8 +190,10 @@ router.get('/', auth, async (req, res) => {
 
     const where  = conds.length ? 'WHERE '+conds.join(' AND ') : '';
     const offset = (page-1)*limit;
+    const orderCol = EXT_SORT_COLS[sort_by] || 'created_at';
+    const orderDir = sort_dir === 'asc' ? 'ASC' : 'DESC';
     const countR = await extPool.query(`SELECT COUNT(*) FROM items ${where}`, params);
-    const dataR  = await extPool.query(`SELECT * FROM items ${where} ORDER BY created_at DESC LIMIT $${i} OFFSET $${i+1}`, [...params,parseInt(limit),parseInt(offset)]);
+    const dataR  = await extPool.query(`SELECT * FROM items ${where} ORDER BY ${orderCol} ${orderDir} NULLS LAST LIMIT $${i} OFFSET $${i+1}`, [...params,parseInt(limit),parseInt(offset)]);
     const enriched = await enrichRows(dataR.rows);
 
     // Mask passwords

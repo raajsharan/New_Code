@@ -14,8 +14,15 @@ import {
   PlusCircle, RotateCcw, Upload, Download, List, Plus,
   Search, Edit2, Trash2, ChevronLeft, ChevronRight,
   Eye, EyeOff, RefreshCw, ExternalLink, Server,
-  AlertTriangle, CheckCircle
+  AlertTriangle, CheckCircle, ArrowUp, ArrowDown, ArrowUpDown
 } from 'lucide-react';
+
+const SortIcon = ({ col, sortBy, sortDir }) => {
+  if (sortBy !== col) return <ArrowUpDown size={10} className="ml-1 opacity-30 inline"/>;
+  return sortDir === 'asc'
+    ? <ArrowUp size={10} className="ml-1 text-blue-600 inline"/>
+    : <ArrowDown size={10} className="ml-1 text-blue-600 inline"/>;
+};
 
 // 
 // Default field  group layout (mirrors migrate_v7.sql)
@@ -534,6 +541,8 @@ function AssetListTab({ onEdit, refreshKey }) {
   const [showColMenu, setShowColMenu] = useState(false);
   const colMenuRef = useRef(null);
   const [filters, setFilters]     = useState({search:'',location:'',department:'',server_status:'',asset_type:''});
+  const [sortBy, setSortBy]       = useState('');
+  const [sortDir, setSortDir]     = useState('asc');
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkSubmitting, setBulkSubmitting] = useState(false);
   const [bulkDryRunning, setBulkDryRunning] = useState(false);
@@ -566,13 +575,20 @@ function AssetListTab({ onEdit, refreshKey }) {
     setLoading(true);
     try {
       const params={page,limit,...filters};
+      if (sortBy) { params.sort_by=sortBy; params.sort_dir=sortDir; }
       Object.keys(params).forEach(k=>{if(!params[k])delete params[k];});
       const r=await assetsAPI.getAll(params);
       setAssets(r.data.assets); setTotal(r.data.total);
       setSelected(new Set());
     } catch { toast.error('Failed to load'); }
     finally { setLoading(false); }
-  },[page,limit,filters]);
+  },[page,limit,filters,sortBy,sortDir]);
+
+  const handleSort = (key) => {
+    if (sortBy === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortBy(key); setSortDir('asc'); }
+    setPage(1);
+  };
 
   useEffect(()=>{fetchMeta();},[fetchMeta,configVersion]);
   useEffect(()=>{fetchAssets();},[fetchAssets,configVersion,refreshKey]);
@@ -740,11 +756,12 @@ function AssetListTab({ onEdit, refreshKey }) {
             <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-30">
               <tr>
                 {canWrite && <th className="table-th bg-gray-50 z-40 w-8 px-2" style={{position:'sticky',left:0}}><input type="checkbox" checked={allPageSelected} onChange={toggleSelectAll} className="accent-blue-600"/></th>}
-                <th className="table-th bg-gray-50 z-40 border-r border-gray-200" style={{position:'sticky',left:canWrite?32:0,minWidth:COL_VM}}>VM Name</th>
-                <th className="table-th bg-gray-50 z-40 border-r border-gray-200" style={{position:'sticky',left:(canWrite?32:0)+COL_VM,minWidth:COL_IP}}>IP Address</th>
+                <th className="table-th bg-gray-50 z-40 border-r border-gray-200 cursor-pointer select-none hover:bg-gray-100" style={{position:'sticky',left:canWrite?32:0,minWidth:COL_VM}} onClick={()=>handleSort('vm_name')}>VM Name<SortIcon col="vm_name" sortBy={sortBy} sortDir={sortDir}/></th>
+                <th className="table-th bg-gray-50 z-40 border-r border-gray-200 cursor-pointer select-none hover:bg-gray-100" style={{position:'sticky',left:(canWrite?32:0)+COL_VM,minWidth:COL_IP}} onClick={()=>handleSort('ip_address')}>IP Address<SortIcon col="ip_address" sortBy={sortBy} sortDir={sortDir}/></th>
                 {colConfig.filter(c=>c.visible && c.key!=='actions').map(c=>{
                   const labels={os_hostname:'Hostname',asset_type:'Asset Type',os_type:'OS',os_version:'OS Version',assigned_user:'Assigned User',department:'Dept',server_status:'Status',patching_type:'Patch Type',server_patch_type:'Ser. Patch Type',patching_schedule:'Schedule',location:'Location',serial_number:'Serial',idrac:'iDRAC',oem_status:'OME',eol_status:'EOL',me_installed:'ME',tenable_installed:'Tenable',hosted_ip:'Hosted IP',asset_tag:'Asset Tag',business_purpose:'Business Purpose',additional_remarks:'Add. Remark',asset_username:'Username',asset_password:'Password',submitted_by:'Submitted By',updated_at:'Last Modified'};
-                  return <th key={c.key} className="table-th bg-gray-50 z-30">{labels[c.key]||c.key}</th>;
+                  const sortable=['os_hostname','asset_type','os_type','os_version','assigned_user','department','server_status','patching_type','server_patch_type','patching_schedule','location','serial_number','eol_status','asset_tag','submitted_by','updated_at'];
+                  return <th key={c.key} className={`table-th bg-gray-50 z-30 ${sortable.includes(c.key)?'cursor-pointer select-none hover:bg-gray-100':''}`} onClick={sortable.includes(c.key)?()=>handleSort(c.key):undefined}>{labels[c.key]||c.key}{sortable.includes(c.key)&&<SortIcon col={c.key} sortBy={sortBy} sortDir={sortDir}/>}</th>;
                 })}
                 {customFields.map(cf=><th key={cf.field_key} className="table-th bg-gray-50 z-30">{cf.field_label}</th>)}
                 <th className="table-th bg-gray-50 z-30 text-center">Actions</th>
@@ -755,11 +772,11 @@ function AssetListTab({ onEdit, refreshKey }) {
               :assets.length===0?<tr><td colSpan={2+colConfig.filter(c=>c.visible&&c.key!=='actions').length+customFields.length+1} className="text-center py-16 text-gray-400"><p className="font-medium">No assets found</p></td></tr>
               :assets.map(a=>(
                 <tr key={a.id} className={`hover:bg-blue-50/20 ${selected.has(a.id)?'bg-blue-50':''}`}>
-                  {canWrite && <td className="table-td bg-white px-2 w-8" style={{position:'sticky',left:0}} onClick={e=>e.stopPropagation()}><input type="checkbox" checked={selected.has(a.id)} onChange={()=>toggleSelect(a.id)} className="accent-blue-600"/></td>}
-                  <td className="table-td font-mono text-xs font-semibold text-blue-800 bg-white border-r border-gray-100" style={{position:'sticky',left:canWrite?32:0,minWidth:COL_VM}}>
+                  {canWrite && <td className="table-td bg-white px-2 w-8" style={{position:'sticky',left:0,zIndex:2}} onClick={e=>e.stopPropagation()}><input type="checkbox" checked={selected.has(a.id)} onChange={()=>toggleSelect(a.id)} className="accent-blue-600"/></td>}
+                  <td className="table-td font-mono text-xs font-semibold text-blue-800 bg-white border-r border-gray-100" style={{position:'sticky',left:canWrite?32:0,minWidth:COL_VM,zIndex:2}}>
                     {!isBlankLike(a.vm_name)?<button onClick={()=>navigate(`/assets/${a.id}`)} className="hover:underline text-blue-800 text-left w-full">{displayText(a.vm_name)}</button>:<span className="text-gray-400">-</span>}
                   </td>
-                  <td className="table-td font-mono text-xs bg-white border-r border-gray-100" style={{position:'sticky',left:(canWrite?32:0)+COL_VM,minWidth:COL_IP}}>
+                  <td className="table-td font-mono text-xs bg-white border-r border-gray-100" style={{position:'sticky',left:(canWrite?32:0)+COL_VM,minWidth:COL_IP,zIndex:2}}>
                     {!isBlankLike(a.ip_address)?<button onClick={()=>navigate(`/assets/${a.id}`)} className="hover:underline text-blue-700 font-medium">{displayText(a.ip_address)}</button>:<span className="text-gray-400">-</span>}
                   </td>
                   {colConfig.filter(c=>c.visible && c.key!=='actions').map(c=>{

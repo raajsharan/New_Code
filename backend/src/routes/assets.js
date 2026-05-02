@@ -274,10 +274,20 @@ async function checkIPDuplicate(ip_address, excludeId = null) {
   return null;
 }
 
+const ASSET_SORT_COLS = {
+  vm_name:'a.vm_name', ip_address:'a.ip_address', os_hostname:'a.os_hostname',
+  asset_type:'at.name', os_type:'ot.name', os_version:'ov.name',
+  assigned_user:'a.assigned_user', department:'d.name', server_status:'ss.name',
+  patching_type:'pt.name', server_patch_type:'spt.name', patching_schedule:'ps.name',
+  location:'l.name', serial_number:'a.serial_number', eol_status:'a.eol_status',
+  asset_tag:'a.asset_tag', submitted_by:'a.submitted_by', updated_at:'a.updated_at',
+  created_at:'a.created_at',
+};
+
 // GET /api/assets
 router.get('/', auth, async (req, res) => {
   try {
-    const { search, location, department, server_status, asset_type, page = 1, limit = 20 } = req.query;
+    const { search, location, department, server_status, asset_type, page = 1, limit = 20, sort_by = 'created_at', sort_dir = 'desc' } = req.query;
     const conds = [], params = [];
     let i = 1;
     if (search) {
@@ -291,10 +301,12 @@ router.get('/', auth, async (req, res) => {
 
     const joins = `LEFT JOIN asset_types at ON a.asset_type_id=at.id LEFT JOIN departments d ON a.department_id=d.id LEFT JOIN server_status ss ON a.server_status_id=ss.id LEFT JOIN locations l ON a.location_id=l.id LEFT JOIN patching_types pt ON a.patching_type_id=pt.id LEFT JOIN patching_schedules ps ON a.patching_schedule_id=ps.id LEFT JOIN server_patch_types spt ON a.server_patch_type_id=spt.id LEFT JOIN os_types ot ON a.os_type_id=ot.id LEFT JOIN os_versions ov ON a.os_version_id=ov.id`;
     const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
+    const orderCol = ASSET_SORT_COLS[sort_by] || 'a.created_at';
+    const orderDir = sort_dir === 'asc' ? 'ASC' : 'DESC';
 
     const countR = await pool.query(`SELECT COUNT(*) FROM assets a ${joins} ${where}`, params);
     const offset = (page - 1) * limit;
-    const dataR  = await pool.query(`${ASSET_SELECT} ${where} ORDER BY a.created_at DESC LIMIT $${i} OFFSET $${i+1}`, [...params, parseInt(limit), parseInt(offset)]);
+    const dataR  = await pool.query(`${ASSET_SELECT} ${where} ORDER BY ${orderCol} ${orderDir} NULLS LAST LIMIT $${i} OFFSET $${i+1}`, [...params, parseInt(limit), parseInt(offset)]);
 
     // Decrypt passwords
     dataR.rows.forEach(r => { if (r.asset_password) r.asset_password = decryptPassword(r.asset_password); });
