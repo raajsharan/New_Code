@@ -214,9 +214,9 @@ export default function WeeklyReportPage({ embedded = false }) {
 
   const metrics = useMemo(() => {
     const assetDecommissioned = assets.filter((r) => isDecommissioned(r.server_status)).length;
-    const extDecommissioned = extAssets.filter((r) => isDecommissioned(r.status)).length;
+    const extDecommissioned = extAssets.filter((r) => isDecommissioned(r.server_status)).length;
     const assetNonDecom = assets.filter((r) => !isDecommissioned(r.server_status));
-    const extNonDecom = extAssets.filter((r) => !isDecommissioned(r.status));
+    const extNonDecom = extAssets.filter((r) => !isDecommissioned(r.server_status));
     const assetTotal = assetNonDecom.length;
     const extTotal = extNonDecom.length;
     const assetPatchRows = assets.filter((r) => !isNotApplicablePatching(r.patching_type));
