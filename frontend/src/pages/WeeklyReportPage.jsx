@@ -240,6 +240,20 @@ export default function WeeklyReportPage({ embedded = false }) {
     const extAutoPatch = extPatchRows.filter((r) => normalize(r.patching_type).includes('auto')).length;
     const extManualPatch = extPatchRows.filter((r) => normalize(r.patching_type).includes('manual')).length;
 
+    const extLocationMap = new Map();
+    extNonDecom.forEach((r) => {
+      const loc = (r.location && String(r.location).trim()) || 'Unassigned';
+      extLocationMap.set(loc, (extLocationMap.get(loc) || 0) + 1);
+    });
+    const extLocationCounts = Array.from(extLocationMap.entries())
+      .map(([location, count]) => ({ location, count }))
+      .sort((a, b) => {
+        if (a.location === 'Unassigned') return 1;
+        if (b.location === 'Unassigned') return -1;
+        return b.count - a.count;
+      });
+    const extLocationGrandTotal = extLocationCounts.reduce((sum, r) => sum + r.count, 0);
+
     const assetPatchStatusRows = assetPatchRows.filter((r) => ASSET_PATCH_SCOPE.has(normalize(r.asset_type || '')));
     const assetPatchingTotals = createPatchTotals();
     assetPatchingTotals.total_records = assetPatchStatusRows.length;
@@ -355,6 +369,8 @@ export default function WeeklyReportPage({ embedded = false }) {
       extTotal,
       assetDecommissioned,
       extDecommissioned,
+      extLocationCounts,
+      extLocationGrandTotal,
       totalAll: assetTotal + extTotal,
       assetActive,
       extActive,
@@ -617,6 +633,30 @@ export default function WeeklyReportPage({ embedded = false }) {
                 <p className="text-gray-700 mt-2">- <strong>{metrics.extAutoPatch}</strong> VMs have been added to auto patching.</p>
                 <p className="text-gray-700 mt-1">- <strong>{metrics.extManualPatch}</strong> VMs are marked as manual patching.</p>
                 <p className="text-gray-700 mt-1">- <strong>{metrics.extMeInstalled}</strong> VMs have ME Agent installed.</p>
+
+                <p className="text-sm font-bold text-blue-900 underline mt-4 mb-2">Location-wise endpoint count:</p>
+                <div className="overflow-x-auto rounded-lg border border-gray-200 inline-block">
+                  <table className="text-sm" style={{ borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr className="bg-slate-100">
+                        <th className="text-left px-4 py-2 border border-gray-200 font-semibold text-gray-800">Location</th>
+                        <th className="text-right px-4 py-2 border border-gray-200 font-semibold text-gray-800">Count</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {metrics.extLocationCounts.map((row) => (
+                        <tr key={row.location}>
+                          <td className="px-4 py-2 border border-gray-200 text-gray-800">{row.location}</td>
+                          <td className="px-4 py-2 border border-gray-200 text-right text-gray-900 font-medium">{row.count}</td>
+                        </tr>
+                      ))}
+                      <tr className="bg-slate-50">
+                        <td className="px-4 py-2 border border-gray-200 font-bold text-gray-900">Grand Total</td>
+                        <td className="px-4 py-2 border border-gray-200 text-right font-bold text-gray-900">{metrics.extLocationGrandTotal}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </td>
             </tr>
 
