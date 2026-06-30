@@ -17,6 +17,10 @@ function isActiveServerStatus(v) {
   return true;
 }
 
+function isDecommissioned(v) {
+  return normalize(v).includes('decommission');
+}
+
 function findNameConflictsByField(rows, field) {
   const counts = new Map();
   rows.forEach((r) => {
@@ -209,8 +213,12 @@ export default function WeeklyReportPage({ embedded = false }) {
   }, []);
 
   const metrics = useMemo(() => {
-    const assetTotal = assets.length;
-    const extTotal = extAssets.length;
+    const assetDecommissioned = assets.filter((r) => isDecommissioned(r.server_status)).length;
+    const extDecommissioned = extAssets.filter((r) => isDecommissioned(r.status)).length;
+    const assetNonDecom = assets.filter((r) => !isDecommissioned(r.server_status));
+    const extNonDecom = extAssets.filter((r) => !isDecommissioned(r.status));
+    const assetTotal = assetNonDecom.length;
+    const extTotal = extNonDecom.length;
     const assetPatchRows = assets.filter((r) => !isNotApplicablePatching(r.patching_type));
     const extPatchRows = extAssets.filter((r) => !isNotApplicablePatching(r.patching_type));
     const combinedPatchRows = [...assetPatchRows, ...extPatchRows];
@@ -218,11 +226,11 @@ export default function WeeklyReportPage({ embedded = false }) {
     const assetActive = assets.filter((r) => isActiveServerStatus(r.server_status)).length;
     const extActive = extAssets.filter((r) => normalize(r.status) === 'active').length;
 
-    const assetPwdMissing = assets.filter((r) => isBlank(r.asset_password)).length;
-    const extPwdMissing = extAssets.filter((r) => isBlank(r.asset_password)).length;
+    const assetPwdMissing = assetNonDecom.filter((r) => isBlank(r.asset_password)).length;
+    const extPwdMissing = extNonDecom.filter((r) => isBlank(r.asset_password)).length;
     const assetWithPassword = assetTotal - assetPwdMissing;
     const extWithPassword = extTotal - extPwdMissing;
-    const extMeInstalled = extAssets.filter((r) => !!r.me_installed_status).length;
+    const extMeInstalled = extNonDecom.filter((r) => !!r.me_installed_status).length;
 
     const assetHostedMissing = assets.filter((r) => isActiveServerStatus(r.server_status) && isBlank(r.hosted_ip)).length;
     const extHostedMissing = extAssets.filter((r) => normalize(r.status) === 'active' && isBlank(r.hosted_ip)).length;
@@ -345,6 +353,8 @@ export default function WeeklyReportPage({ embedded = false }) {
     return {
       assetTotal,
       extTotal,
+      assetDecommissioned,
+      extDecommissioned,
       totalAll: assetTotal + extTotal,
       assetActive,
       extActive,
@@ -436,7 +446,8 @@ export default function WeeklyReportPage({ embedded = false }) {
     y += drawWrapped(ctx, `Asset + Ext Overall: ${metrics.totalWithPassword} out of ${metrics.totalAll} X 100 = ${metrics.overallPasswordCoveragePct}%`, rightX, y + 12, rightW, 40);
 
     ctx.font = '500 28px DejaVu Sans, sans-serif';
-    y += drawWrapped(ctx, `Total Asset Inventory Count: ${metrics.assetTotal}`, rightX, y + 8, rightW, 36);
+    y += drawWrapped(ctx, `Total Asset Inventory Count: ${metrics.assetTotal} (decommissioned excluded)`, rightX, y + 8, rightW, 36);
+    y += drawWrapped(ctx, `Total decommissioned assets: ${metrics.assetDecommissioned}`, rightX, y + 8, rightW, 36);
     y += drawWrapped(ctx, `Asset inventory without password info: ${metrics.assetPwdMissing}`, rightX, y + 8, rightW, 36);
     y += drawWrapped(ctx, `Active assets missing Hosted/Hypervisor info: ${metrics.assetHostedMissing + metrics.extHostedMissing}`, rightX, y + 8, rightW, 36);
     y += drawWrapped(ctx, `Asset name conflicts by OS Hostname: ${metrics.assetOsHostnameConflicts}`, rightX, y + 8, rightW, 36);
@@ -445,10 +456,11 @@ export default function WeeklyReportPage({ embedded = false }) {
     const s2Y = top + section1H + 100;
     ctx.font = '700 32px DejaVu Sans, sans-serif';
     let y2 = s2Y;
-    y2 += drawWrapped(ctx, `Total ${metrics.extTotal} endpoints`, rightX, y2, rightW, 38);
+    y2 += drawWrapped(ctx, `Total ${metrics.extTotal} endpoints (decommissioned excluded)`, rightX, y2, rightW, 38);
     y2 += drawWrapped(ctx, `Compliance: ${metrics.extWithPassword} out of ${metrics.extTotal} = ${metrics.extPasswordCoveragePct}%`, rightX, y2 + 8, rightW, 38);
 
     ctx.font = '500 28px DejaVu Sans, sans-serif';
+    y2 += drawWrapped(ctx, `Total decommissioned VMs: ${metrics.extDecommissioned}`, rightX, y2 + 8, rightW, 34);
     y2 += drawWrapped(ctx, `Password info received: ${metrics.extWithPassword} endpoints`, rightX, y2 + 8, rightW, 34);
     y2 += drawWrapped(ctx, `Auto patching: ${metrics.extAutoPatch} endpoints`, rightX, y2 + 6, rightW, 34);
     y2 += drawWrapped(ctx, `Manual patching: ${metrics.extManualPatch} endpoints`, rightX, y2 + 6, rightW, 34);
@@ -584,7 +596,8 @@ export default function WeeklyReportPage({ embedded = false }) {
                 <p className="text-gray-900 font-semibold">Ext. Asset Inventory Overall: {metrics.extWithPassword} out of {metrics.extTotal} X 100 = {metrics.extPasswordCoveragePct}%</p>
                 <p className="text-gray-900 font-bold mt-1">Asset + Ext Overall: {metrics.totalWithPassword} out of {metrics.totalAll} X 100 = {metrics.overallPasswordCoveragePct}%</p>
 
-                <p className="text-gray-700 mt-4">Total Asset Inventory Count is <strong>{metrics.assetTotal}</strong></p>
+                <p className="text-gray-700 mt-4">Total Asset Inventory Count is <strong>{metrics.assetTotal}</strong> <span className="text-gray-500">(decommissioned excluded)</span></p>
+                <p className="text-gray-700 mt-1">Total decommissioned assets: <strong>{metrics.assetDecommissioned}</strong></p>
                 <p className="text-gray-700 mt-2">From active inventory, pending/follow-ups:</p>
                 <p className="text-gray-700 mt-1">- <strong>{metrics.assetPwdMissing}</strong> assets do not have password info.</p>
                 <p className="text-gray-700 mt-1">- Around <strong>{metrics.assetHostedMissing + metrics.extHostedMissing}</strong> active assets are missing hosted/hypervisor details.</p>
@@ -597,7 +610,8 @@ export default function WeeklyReportPage({ embedded = false }) {
                 <p className="font-semibold text-gray-800">Extended Inventory</p>
               </td>
               <td className="align-top px-4 py-4">
-                <p className="text-gray-900 font-bold">Total {metrics.extTotal} endpoints</p>
+                <p className="text-gray-900 font-bold">Total {metrics.extTotal} endpoints <span className="text-gray-500 font-normal">(decommissioned excluded)</span></p>
+                <p className="text-gray-700 mt-1">Total decommissioned VMs: <strong>{metrics.extDecommissioned}</strong></p>
                 <p className="text-gray-700 mt-1">For <strong>{metrics.extWithPassword}</strong> endpoints, password info is received.</p>
                 <p className="text-gray-900 font-bold mt-3">Compliance: {metrics.extWithPassword} out of {metrics.extTotal} = {metrics.extPasswordCoveragePct}%</p>
                 <p className="text-gray-700 mt-2">- <strong>{metrics.extAutoPatch}</strong> VMs have been added to auto patching.</p>
