@@ -453,6 +453,7 @@ router.get('/stats', auth, async (req, res) => {
     let extCompliance = { compliance_pct: 0, total_alive: 0, auto_alive: 0, manual_alive: 0, grand_total: 0 };
     let extEndpoint = {
       total_endpoints: 0,
+      decommissioned: 0,
       password_received: 0,
       compliance_pct: 0,
       me_installed: 0,
@@ -479,14 +480,15 @@ router.get('/stats', auth, async (req, res) => {
       const [extSummary, extDept, extLoc, extComp, extEndpointBase, extNameConflict] = await Promise.all([
         extPool.query(`
           SELECT
-            COUNT(*)                                                   AS total,
-            COUNT(*) FILTER (WHERE status='Active')                    AS active,
-            COUNT(*) FILTER (WHERE status='Inactive')                  AS inactive,
-            COUNT(*) FILTER (WHERE status='Decommissioned')            AS decommissioned,
-            COUNT(*) FILTER (WHERE status='Maintenance')               AS maintenance,
-            COUNT(*) FILTER (WHERE me_installed_status=TRUE)           AS me_count,
-            COUNT(*) FILTER (WHERE tenable_installed_status=TRUE)      AS tenable_count
-          FROM items`),
+            COUNT(*) FILTER (WHERE NOT (COALESCE(ss.name,'') ILIKE '%decommission%'))                                     AS total,
+            COUNT(*) FILTER (WHERE i.status='Active'      AND NOT (COALESCE(ss.name,'') ILIKE '%decommission%'))          AS active,
+            COUNT(*) FILTER (WHERE i.status='Inactive'    AND NOT (COALESCE(ss.name,'') ILIKE '%decommission%'))          AS inactive,
+            COUNT(*) FILTER (WHERE COALESCE(ss.name,'') ILIKE '%decommission%')                                           AS decommissioned,
+            COUNT(*) FILTER (WHERE i.status='Maintenance' AND NOT (COALESCE(ss.name,'') ILIKE '%decommission%'))          AS maintenance,
+            COUNT(*) FILTER (WHERE i.me_installed_status=TRUE      AND NOT (COALESCE(ss.name,'') ILIKE '%decommission%')) AS me_count,
+            COUNT(*) FILTER (WHERE i.tenable_installed_status=TRUE AND NOT (COALESCE(ss.name,'') ILIKE '%decommission%')) AS tenable_count
+          FROM items i
+          LEFT JOIN public.server_status ss ON i.server_status_id = ss.id`),
         extPool.query(`
           SELECT
             COALESCE(d.name,'Unassigned') AS department,
@@ -561,7 +563,8 @@ router.get('/stats', auth, async (req, res) => {
           FROM items i
           LEFT JOIN public.patching_types pt ON i.patching_type_id = pt.id
           LEFT JOIN public.server_status ss ON i.server_status_id = ss.id
-          WHERE (CARDINALITY($7::text[]) = 0 OR COALESCE(i.status,'') <> ALL($7::text[]))
+          WHERE NOT (COALESCE(ss.name,'') ILIKE '%decommission%')
+            AND (CARDINALITY($7::text[]) = 0 OR COALESCE(i.status,'') <> ALL($7::text[]))
             AND (CARDINALITY($8::text[]) = 0 OR COALESCE(i.eol_status,'InSupport') <> ALL($8::text[]))`,
           [meNotInstalledOnly, mePatchTypes, meServerStatuses, meEolStatuses, autoTypes, manualTypes, extTotalExcludeStatuses, extTotalExcludeEol]),
         extPool.query(`
@@ -601,6 +604,7 @@ router.get('/stats', auth, async (req, res) => {
       const effectiveExtTotal = extEndpointTotal || extSummaryTotal;
       extEndpoint = {
         total_endpoints: effectiveExtTotal,
+        decommissioned: toInt(extStats.decommissioned),
         password_received: toInt(eb.password_received),
         compliance_pct: pct2(toInt(eb.password_received), effectiveExtTotal),
         me_installed: toInt(eb.me_installed),

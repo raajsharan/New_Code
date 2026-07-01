@@ -780,7 +780,8 @@ function ExtEndpointComplianceCard({ data }) {
     <div className="card">
       <SectionHeader icon={Layers} title="Ext. Endpoint Compliance" subtitle="Password and agent compliance across extended inventory endpoints" />
       <div className="space-y-2 text-sm">
-        <p className="text-gray-700 font-medium">Total {data.total_endpoints || 0} endpoints</p>
+        <p className="text-gray-700 font-medium">Total {data.total_endpoints || 0} endpoints <span className="text-gray-400 font-normal">(decommissioned excluded)</span></p>
+        <p className="text-gray-700">Total decommissioned VMs: <span className="font-semibold">{data.decommissioned || 0}</span></p>
         <p className="text-gray-700">For <span className="font-semibold">{data.password_received || 0}</span> endpoints we received password info.</p>
         <p className="text-blue-800 font-semibold">Compliance: {data.password_received || 0} out of {data.total_endpoints || 0} = {fmtPct(data.compliance_pct)}</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
@@ -920,11 +921,12 @@ export default function DashboardPage() {
   ] : [];
 
   const extCards = stats?.ext_stats ? [
-    {key:'ext_total',   label:'Ext. Total',       value:stats.ext_stats.total},
-    {key:'ext_active',  label:'Ext. Active',      value:stats.ext_stats.active},
-    {key:'ext_inactive',label:'Ext. Inactive',    value:stats.ext_stats.inactive},
-    {key:'ext_me',      label:'Ext. ME Installed', value:stats.ext_stats.me_count},
-    {key:'ext_tenable', label:'Ext. Tenable',     value:stats.ext_stats.tenable_count},
+    {key:'ext_total',        label:'Ext. Total (excl. decom.)', value:stats.ext_stats.total},
+    {key:'ext_decommissioned',label:'Ext. Decommissioned',      value:stats.ext_stats.decommissioned},
+    {key:'ext_active',       label:'Ext. Active',               value:stats.ext_stats.active},
+    {key:'ext_inactive',     label:'Ext. Inactive',             value:stats.ext_stats.inactive},
+    {key:'ext_me',           label:'Ext. ME Installed',         value:stats.ext_stats.me_count},
+    {key:'ext_tenable',      label:'Ext. Tenable',              value:stats.ext_stats.tenable_count},
   ] : [];
 
   const vmPie     = stats ? { labels:['Virtual Machines','Physical Servers'], datasets:[{data:[stats.vm_count,stats.physical_server_count],backgroundColor:['#1d4ed8','#7c3aed'],borderWidth:0}] } : null;
