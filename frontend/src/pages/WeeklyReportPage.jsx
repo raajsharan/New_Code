@@ -21,6 +21,11 @@ function isDecommissioned(v) {
   return normalize(v).includes('decommission');
 }
 
+function isOutOfScope(v) {
+  const s = normalize(v);
+  return s.includes('not in scope') || s.includes('not applicable');
+}
+
 function findNameConflictsByField(rows, field) {
   const counts = new Map();
   rows.forEach((r) => {
@@ -216,7 +221,7 @@ export default function WeeklyReportPage({ embedded = false }) {
     const assetDecommissioned = assets.filter((r) => isDecommissioned(r.server_status)).length;
     const extDecommissioned = extAssets.filter((r) => isDecommissioned(r.server_status)).length;
     const assetNonDecom = assets.filter((r) => !isDecommissioned(r.server_status));
-    const extNonDecom = extAssets.filter((r) => !isDecommissioned(r.server_status));
+    const extNonDecom = extAssets.filter((r) => !isDecommissioned(r.server_status) && !isOutOfScope(r.server_status) && !isOutOfScope(r.status));
     const assetTotal = assetNonDecom.length;
     const extTotal = extNonDecom.length;
     const assetPatchRows = assets.filter((r) => !isNotApplicablePatching(r.patching_type));
@@ -472,7 +477,7 @@ export default function WeeklyReportPage({ embedded = false }) {
     const s2Y = top + section1H + 100;
     ctx.font = '700 32px DejaVu Sans, sans-serif';
     let y2 = s2Y;
-    y2 += drawWrapped(ctx, `Total ${metrics.extTotal} endpoints (decommissioned excluded)`, rightX, y2, rightW, 38);
+    y2 += drawWrapped(ctx, `Total ${metrics.extTotal} endpoints (decommissioned, not in scope & not applicable excluded)`, rightX, y2, rightW, 38);
     y2 += drawWrapped(ctx, `Compliance: ${metrics.extWithPassword} out of ${metrics.extTotal} = ${metrics.extPasswordCoveragePct}%`, rightX, y2 + 8, rightW, 38);
 
     ctx.font = '500 28px DejaVu Sans, sans-serif';
@@ -626,7 +631,7 @@ export default function WeeklyReportPage({ embedded = false }) {
                 <p className="font-semibold text-gray-800">Extended Inventory</p>
               </td>
               <td className="align-top px-4 py-4">
-                <p className="text-gray-900 font-bold">Total {metrics.extTotal} endpoints <span className="text-gray-500 font-normal">(decommissioned excluded)</span></p>
+                <p className="text-gray-900 font-bold">Total {metrics.extTotal} endpoints <span className="text-gray-500 font-normal">(decommissioned, not in scope &amp; not applicable excluded)</span></p>
                 <p className="text-gray-700 mt-1">Total decommissioned VMs: <strong>{metrics.extDecommissioned}</strong></p>
                 <p className="text-gray-700 mt-1">For <strong>{metrics.extWithPassword}</strong> endpoints, password info is received.</p>
                 <p className="text-gray-900 font-bold mt-3">Compliance: {metrics.extWithPassword} out of {metrics.extTotal} = {metrics.extPasswordCoveragePct}%</p>
