@@ -20,7 +20,7 @@ const TABLE_CONFIG = [
   { key: 'locations', label: 'Locations', examples: ['DC1', 'DC2', 'Azure', 'AWS'] },
 ];
 
-function DropdownSection({ tableKey, label, items, canWrite, onRefresh }) {
+function DropdownSection({ tableKey, label, items, canWrite, onRefresh, selectedId, onSelect }) {
   const { requestDelete } = useDeleteConfirm();
   const [expanded, setExpanded] = useState(true);
   const [newName, setNewName] = useState('');
@@ -98,7 +98,15 @@ function DropdownSection({ tableKey, label, items, canWrite, onRefresh }) {
                   </>
                 ) : (
                   <>
-                    <span className="flex-1 text-sm text-gray-700 px-3 py-1.5 bg-gray-50 rounded-lg">{item.name}</span>
+                    {onSelect ? (
+                      <button type="button" onClick={() => onSelect(selectedId === item.id ? '' : item.id)}
+                        title="Show the linked versions"
+                        className={`flex-1 text-left text-sm px-3 py-1.5 rounded-lg border transition-colors ${
+                          selectedId === item.id ? 'bg-primary-50 border-primary-300 text-primary-800 font-medium' : 'bg-gray-50 border-transparent text-gray-700 hover:bg-gray-100'
+                        }`}>{item.name}</button>
+                    ) : (
+                      <span className="flex-1 text-sm text-gray-700 px-3 py-1.5 bg-gray-50 rounded-lg">{item.name}</span>
+                    )}
                     {canWrite && (
                       <>
                         <button onClick={() => { setEditId(item.id); setEditName(item.name); }}
@@ -132,10 +140,9 @@ function DropdownSection({ tableKey, label, items, canWrite, onRefresh }) {
   );
 }
 
-function OsVersionsSection({ dropdowns, canWrite, onRefresh }) {
+function OsVersionsSection({ dropdowns, canWrite, onRefresh, selectedType, setSelectedType }) {
   const { requestDelete } = useDeleteConfirm();
   const [expanded, setExpanded] = useState(false);
-  const [selectedType, setSelectedType] = useState('');
   const [newVersion, setNewVersion] = useState('');
   const [editId, setEditId] = useState(null);
   const [editName, setEditName] = useState('');
@@ -143,6 +150,9 @@ function OsVersionsSection({ dropdowns, canWrite, onRefresh }) {
   const osTypes = dropdowns.os_types || [];
   const allVersions = dropdowns.os_versions || [];
   const filtered = selectedType ? allVersions.filter(v => v.os_type_id === parseInt(selectedType)) : allVersions;
+
+  // Picking an OS type (here or in the OS Types list) opens the versions list.
+  useEffect(() => { if (selectedType) setExpanded(true); }, [selectedType]);
 
   const handleAdd = async (e) => {
     e.preventDefault();
@@ -661,6 +671,7 @@ export default function ConfigurationPage() {
   const [dropdowns, setDropdowns] = useState({});
   const [loading, setLoading]     = useState(true);
   const [activeTab, setActiveTab] = useState('add-asset');
+  const [selectedOsType, setSelectedOsType] = useState('');
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -736,9 +747,11 @@ export default function ConfigurationPage() {
               items={dropdowns[key] || []}
               canWrite={canWrite}
               onRefresh={handleRefresh}
+              {...(key === 'os_types' ? { selectedId: selectedOsType ? parseInt(selectedOsType) : null, onSelect: setSelectedOsType } : {})}
             />
           ))}
-          <OsVersionsSection dropdowns={dropdowns} canWrite={canWrite} onRefresh={handleRefresh} />
+          <OsVersionsSection dropdowns={dropdowns} canWrite={canWrite} onRefresh={handleRefresh}
+            selectedType={selectedOsType} setSelectedType={setSelectedOsType} />
         </div>
       )}
     </div>
